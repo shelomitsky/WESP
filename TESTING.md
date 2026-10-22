@@ -27,7 +27,7 @@ existing applet/CLI/service/config identities remain compatible with upgrades.
   malformed-request recovery, socket mode 0600, competing owners and SIGTERM
   cleanup/exit-realtime/return-to-baseline commands. HOME/XDG/runtime are temporary;
   no real serial port, desktop bus or live service is used. These passed on an
-  unrestricted local execution host, not yet on the remote CI runner.
+  unrestricted local execution host and subsequently on all three remote CI jobs.
   In the restricted sandbox, socket bind fails with `PermissionError: [Errno 1]
   Operation not permitted`; that is a failing environment, never a skipped test.
 - Translation checks cover English/Russian/unknown-language fallback, C locale,
@@ -65,12 +65,18 @@ existing applet/CLI/service/config identities remain compatible with upgrades.
   completes install, upgrade, rollback, installed-launcher configuration read,
   and uninstall in a fresh HOME with a space, retaining settings byte for byte.
   No service manager, user bus or hardware is invoked.
-- GitHub workflow runs this same gate for Python 3.10/3.12/3.14 on Ubuntu24.04.
-  The workflow is prepared, not executed on a remote runner.
+- GitHub Actions ran this same gate on Ubuntu 24.04 for Python 3.10, 3.12
+  and 3.14 on 2026-10-23 (Europe/Minsk). All three jobs passed 101 tests plus
+  source/catalog/shell checks, reproducible builds and cold archive lifecycle.
+  First verified commit: `fb1a147225b93647a4196fc25ae2d97493d3e576`.
+  [First successful external CI run](https://github.com/shelomitsky/WESP/actions/runs/39858410742).
+  The initial run reported a checkout@v4 Node.js 20 deprecation warning;
+  checkout was subsequently updated to v6 (Node.js 24).
 
 Environment for local Python tests: Python 3.14.4, NumPy 2.3.5, pyserial 3.5,
 Pillow 12.1.1 and Node.js 22.22.2.
-The configured Ubuntu24.04 CI job and lower Python bound are not yet accepted.
+The core source gate is now verified on Ubuntu 24.04 with Python 3.10/3.12/3.14.
+This does not accept Qt/Plasma/DBus packages or a fresh desktop installation.
 
 The tests belong to the separate generalized candidate. They are not presented
 as equivalent to the original installation's 94-scenario in-memory suite:
@@ -79,7 +85,8 @@ DSP/worker/UART checks and adds configuration/layout/installation checks.
 
 The release checks run here use temporary HOME/XDG directories; IPC uses real temporary AF_UNIX sockets. They do not change
 active lighting services or open a real UART. No firmware was flashed and no
-publication/push was made. The owner has separately updated the candidate and
+public release was made by these checks. A private GitHub repository was
+created and pushed on 2026-10-23 as recorded above. The owner has separately updated the candidate and
 confirmed the new remote, controls and slideshow palette following. Physical
 latency, fresh KDE installation and other pending checks remain in
 RELEASE_CHECKLIST.md.

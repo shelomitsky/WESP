@@ -27,9 +27,19 @@ The first alpha targets KDE Plasma 6; the product name is desktop-independent.
 - [x] Actual AF_UNIX client/service integration in separate processes with only
   UART replaced: enrollment, state/RGB/off, selected identity/count guards,
   malformed requests, competing owner and graceful socket cleanup. Passed on
-  the unrestricted local host; the same tests are mandatory in remote CI.
+  the unrestricted local host; the same tests also passed in all three remote CI jobs on 2026-10-23.
 - [x] Light/dark SVG rendering and live QML theme selection checked offscreen.
   This is not a real Plasma theme/session lifecycle check.
+
+## Confirmed external CI — 2026-10-23
+
+- [x] GitHub Actions on Ubuntu 24.04: Python 3.10/3.12/3.14, 101 tests in each
+  job; translations, real IPC, shell quoting, reproducible builds and cold
+  install/upgrade/rollback/uninstall all passed.
+- Evidence: [run 39858410742](https://github.com/shelomitsky/WESP/actions/runs/39858410742),
+  commit `fb1a147225b93647a4196fc25ae2d97493d3e576`.
+- Repository: [shelomitsky/WESP](https://github.com/shelomitsky/WESP), private
+  while the remaining desktop/hardware/review gates are open.
 
 ## Confirmed on the owner's current setup
 
@@ -54,8 +64,8 @@ is verified; fresh install, rollback and logout/login acceptance remain open.
 - [ ] Physical unequal/reversed sections, notification/volume expiry, off/sleep/wake,
   manual-effect restoration and device-change rejection during active overlays.
 - [ ] User systemd install/upgrade/rollback with real active/enabled states and logout behavior.
-- [ ] Dependency installation on a named supported distribution; the prepared
-  Python 3.10/3.12/3.14 CI matrix still needs a real remote runner result.
+- [ ] Desktop dependency installation on a named supported Plasma 6 distribution.
+  Ubuntu 24.04 source CI is verified; it does not install/accept a KDE session.
 - [ ] Independent review of the device switch and installer transaction boundaries.
 
 The owner has updated the candidate on their existing setup. The original USB
