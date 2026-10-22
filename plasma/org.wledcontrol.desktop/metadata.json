@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Chapman"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Desktop ambient lighting: music, wallpapers, volume and notifications",
+        "Description[ru]": "Подсветка рабочего места: музыка, обои, громкость и уведомления",
+        "Icon": "wled-control",
+        "Id": "org.wledcontrol.desktop",
+        "License": "MIT",
+        "Name": "WESP",
+        "Version": "0.2.0-alpha.5"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "KPackageStructure": "Plasma/Applet"
+}

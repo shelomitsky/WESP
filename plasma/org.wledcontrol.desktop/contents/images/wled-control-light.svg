@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>WESP — light</title>
+  <path d="M28 0 L100 0 C115.464 0 128 12.536 128 28 L128 100 C128 115.464 115.464 128 100 128 L28 128 C12.536 128 0 115.464 0 100 L0 28 C0 12.536 12.536 0 28 0 Z" fill="#edf2f7"/>
+  <path d="M24 32 L43 97 L56 57" fill="none" stroke="#087f72" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M72 57 L85 97 L108 24" fill="none" stroke="#a65300" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

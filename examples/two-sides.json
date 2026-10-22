@@ -1,0 +1,4 @@
+[
+  {"id":"first","name":"Лента 1","start":0,"count":10,"reverse":true,"placement":"custom"},
+  {"id":"second","name":"Лента 2","start":10,"count":10,"reverse":false,"placement":"custom"}
+]

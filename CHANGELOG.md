@@ -1,0 +1,46 @@
+# Changes
+
+## 0.2.0-alpha.5 — local candidate
+
+- Public name WESP, independent of the desktop environment. The first alpha
+  still targets KDE Plasma 6. Existing applet/CLI/service/config identities are
+  preserved for upgrades; source archives now use the wesp name and folder.
+
+- Mandatory real socket/service/client subprocess integration with a fake serial
+  peer; enrollment, frame/power, invalid request, owner lock and shutdown checks.
+
+- Custom two-strip W icon in the panel, popup and KDE widget picker.
+- Light icon variant selected automatically with the widget's KDE color theme.
+- English source/fallback UI and Russian translation for controls, tooltips,
+  accessibility labels, audio/wallpaper status and helper error messages.
+- Shared KDE/gettext domain, compiled catalogs in per-user managed installation,
+  language/placeholder/catalog checks and guidance for adding more languages.
+- Existing user section names remain unchanged.
+
+## 0.2.0-alpha.4 — local candidate
+
+- Standard KDE slideshow support reads the current image from running Plasma,
+  avoiding a missing or stale Image entry in the saved desktop configuration.
+- Owner confirmed slideshow palette changes on 2026-10-22.
+- Added a complete source-release check, real shell argument tests and a Russian
+  first-run guide. The Python 3.10/3.12/3.14 CI matrix is prepared, not yet run.
+
+## 0.2.0-alpha.3
+
+- Automatic equalizer palette from local wallpaper images and Picture of the Day.
+- Palette preview and source/fallback status; sampling outside the audio worker.
+
+## 0.2.0-alpha.2
+
+- Separate Music / Signals / Strips settings, sensitivity, silence gate,
+  independent attack and decay, and five fixed equalizer palettes.
+- Notification styles: two flashes, pulse, tint or one pixel, configurable color
+  and strength, with a preview that does not create a notification ID.
+
+## 0.2.0-alpha.1
+
+- Generalized USB device enrollment, named/reversed unequal sections, shared
+  rendering, isolated settings and a per-user installer with backup/rollback.
+
+No public release or publication is recorded yet. Local source checks and owner
+reports do not replace the remaining checks in RELEASE_CHECKLIST.md.

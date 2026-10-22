@@ -1,0 +1,499 @@
+# Russian translation of WESP.
+# Distributed under the MIT license.
+msgid ""
+msgstr "Project-Id-Version: WESP 0.2.0-alpha.5\nPO-Revision-Date: 2026-10-22 00:00+0300\nLast-Translator: WESP contributors\nLanguage-Team: Russian\nLanguage: ru\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nPlural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "%1 ms"
+msgstr "%1 мс"
+
+msgid "%1 — classic palette"
+msgstr "%1 — классическая палитра"
+
+msgid "A unique section ID and name are required"
+msgstr "Нужны уникальный ID и имя участка"
+
+msgid "Active notifications: %1"
+msgstr "Активных уведомлений: %1"
+
+msgid "Add section"
+msgstr "Добавить участок"
+
+msgid "All LEDs are assigned. Shorten a section before adding another."
+msgstr "Все диоды распределены. Уменьшите участок перед добавлением нового."
+
+msgid "Attack"
+msgstr "Зажигание"
+
+msgid "Attack softens the rise to a peak. The noise gate rejects quiet background noise."
+msgstr "Зажигание смягчает подъём к пику. Порог тишины убирает реакцию на слабый шум."
+
+msgid "Back to controls"
+msgstr "На пульт"
+
+msgid "Between 1 and 1024 RGB LEDs are supported"
+msgstr "Поддерживается от 1 до 1024 RGB-диодов"
+
+msgid "Blue"
+msgstr "Голубой"
+
+msgid "Bottom"
+msgstr "Снизу"
+
+msgid "Brightness"
+msgstr "Яркость"
+
+msgid "Brightness must be between 1 and 255"
+msgstr "Яркость должна быть от 1 до 255"
+
+msgid "Brightness: %1%"
+msgstr "Яркость: %1%"
+
+msgid "Classic"
+msgstr "Классическая"
+
+msgid "Clear"
+msgstr "Сбросить"
+
+msgid "Color must use the #RRGGBB format"
+msgstr "Цвет должен быть в формате #RRGGBB"
+
+msgid "Configure lighting…"
+msgstr "Настроить подсветку…"
+
+msgid "Connect selected ESP"
+msgstr "Подключить выбранный ESP"
+
+msgid "Constant tint"
+msgstr "Постоянный оттенок"
+
+msgid "Could not contact WLED or execute the command"
+msgstr "Не удалось связаться с WLED или выполнить команду"
+
+msgid "Could not execute the command"
+msgstr "Не удалось выполнить команду"
+
+msgid "Could not read the current slide from Plasma"
+msgstr "Не удалось прочитать текущий слайд из Plasma"
+
+msgid "Could not read the response. Try reconnecting."
+msgstr "Не удалось прочитать ответ. Попробуйте подключиться снова."
+
+msgid "Custom color"
+msgstr "Свой цвет"
+
+msgid "Decay"
+msgstr "Затухание"
+
+msgid "Decay must be an integer from 80 to 600 ms"
+msgstr "Затухание должно быть целым числом от 80 до 600 мс"
+
+msgid "Desktop audio · smooth decay"
+msgstr "Звук рабочего стола · плавное затухание"
+
+msgid "Device address"
+msgstr "Адрес устройства"
+
+msgid "Device and strips"
+msgstr "Устройство и ленты"
+
+msgid "Disabled"
+msgstr "Выключен"
+
+msgid "Disconnected"
+msgstr "Нет связи"
+
+msgid "Enter the device IP address or hostname, such as wled.local"
+msgstr "Укажите IP или имя устройства, например wled.local"
+
+msgid "Equalizer decay"
+msgstr "Затухание эквалайзера"
+
+msgid "Equalizer palette"
+msgstr "Палитра эквалайзера"
+
+msgid "Equalizer worker is not running"
+msgstr "Обработчик эквалайзера не запущен"
+
+msgid "Equalizer — react to music"
+msgstr "Эквалайзер — в такт музыке"
+
+msgid "Fast"
+msgstr "Быстро"
+
+msgid "Find"
+msgstr "Найти"
+
+msgid "Fire"
+msgstr "Огонь"
+
+msgid "Flashes end automatically. Pulse and tint remain while a notification is active."
+msgstr "Вспышки заканчиваются сами. Пульсация и оттенок держатся, пока уведомление активно."
+
+msgid "Frame LED count does not match WLED; reconnect the controller"
+msgstr "Число диодов в кадре не совпадает с WLED; повторите usb_probe.py"
+
+msgid "From wallpaper"
+msgstr "Из обоев"
+
+msgid "Gentle pulse"
+msgstr "Мягкая пульсация"
+
+msgid "Green"
+msgstr "Зелёный"
+
+msgid "Higher values soften the fall. Beat response stays fast."
+msgstr "Больше — плавнее спад. Отклик на удар остаётся быстрым."
+
+msgid "Incomplete USB frame"
+msgstr "Неполный USB-кадр"
+
+msgid "Intensity"
+msgstr "Интенсивность"
+
+msgid "Invalid LED count"
+msgstr "Некорректное число диодов"
+
+msgid "Invalid RGB values"
+msgstr "Некорректные RGB-значения"
+
+msgid "Invalid WLED response"
+msgstr "Некорректный ответ WLED"
+
+msgid "Invalid equalizer color"
+msgstr "Некорректный цвет эквалайзера"
+
+msgid "Invalid expected controller configuration"
+msgstr "Некорректная ожидаемая конфигурация контроллера"
+
+msgid "Invalid level"
+msgstr "Некорректный уровень"
+
+msgid "Invalid power value"
+msgstr "Некорректное питание"
+
+msgid "Invalid section"
+msgstr "Некорректный участок"
+
+msgid "Invalid section direction"
+msgstr "Некорректное направление участка"
+
+msgid "Invalid section placement"
+msgstr "Некорректное расположение участка"
+
+msgid "Invalid setting"
+msgstr "Некорректная настройка"
+
+msgid "KDE accent color"
+msgstr "Цвет KDE"
+
+msgid "KDE has not downloaded the Picture of the Day yet"
+msgstr "Картинка дня ещё не загружена KDE"
+
+msgid "LEDs: %1"
+msgstr "Диодов: %1"
+
+msgid "Left"
+msgstr "Слева"
+
+msgid "Length"
+msgstr "Длина"
+
+msgid "Lighting"
+msgstr "Подсветка"
+
+msgid "Lighting brightness"
+msgstr "Яркость ленты"
+
+msgid "Lighting is off"
+msgstr "Лента выключена"
+
+msgid "Lighting is on"
+msgstr "Лента включена"
+
+msgid "Lighting power"
+msgstr "Питание ленты"
+
+msgid "Music"
+msgstr "Музыка"
+
+msgid "Music response"
+msgstr "Реакция на музыку"
+
+msgid "No KDE desktop found"
+msgstr "Не найден рабочий стол KDE"
+
+msgid "No WLED response over USB"
+msgstr "Нет ответа WLED по USB"
+
+msgid "No audio or WLED connection — reconnecting"
+msgstr "Нет звука или связи с WLED — повторное подключение"
+
+msgid "No confirmed USB state before the change"
+msgstr "Нет подтверждённого состояния USB перед изменением"
+
+msgid "No connection to the lighting"
+msgstr "Нет связи с лентой"
+
+msgid "No image found in the wallpaper package"
+msgstr "В пакете обоев нет изображения"
+
+msgid "No local wallpaper file found"
+msgstr "Не найден локальный файл обоев"
+
+msgid "No recent WLED state over USB"
+msgstr "Нет свежего состояния WLED по USB"
+
+msgid "Noise gate"
+msgstr "Порог тишины"
+
+msgid "Notification color"
+msgstr "Цвет уведомления"
+
+msgid "Notification style"
+msgstr "Способ уведомления"
+
+msgid "Notifications"
+msgstr "Уведомления"
+
+msgid "Notifications and volume"
+msgstr "Уведомления и громкость"
+
+msgid "Numbering starts at 1. Sections must not overlap. Unassigned LEDs stay off."
+msgstr "Нумерация с 1. Участки не должны пересекаться. Нераспределённые диоды гаснут."
+
+msgid "Ocean"
+msgstr "Океан"
+
+msgid "One LED"
+msgstr "Один диод"
+
+msgid "Only local wallpaper images are supported"
+msgstr "Поддерживаются локальные изображения обоев"
+
+msgid "Orange"
+msgstr "Оранжевый"
+
+msgid "Other"
+msgstr "Другое"
+
+msgid "Paused"
+msgstr "Приостановлен"
+
+msgid "Picking wallpaper colors…"
+msgstr "Подбираем цвета обоев…"
+
+msgid "Picture of the Day colors · %1"
+msgstr "Цвета картинки дня · %1"
+
+msgid "Plasma has not reported the current slide yet"
+msgstr "Plasma ещё не сообщила текущий слайд"
+
+msgid "Preview effect"
+msgstr "Проверить эффект"
+
+msgid "Purple"
+msgstr "Фиолетовый"
+
+msgid "Rainbow"
+msgstr "Радуга"
+
+msgid "Reacting to music"
+msgstr "В такт музыке"
+
+msgid "Realtime override is enabled in WLED"
+msgstr "В WLED включено переопределение realtime-потока"
+
+msgid "Reconnect"
+msgstr "Подключиться снова"
+
+msgid "Remove section"
+msgstr "Удалить участок"
+
+msgid "Reverse"
+msgstr "Развернуть"
+
+msgid "Right"
+msgstr "Справа"
+
+msgid "Save address"
+msgstr "Сохранить адрес"
+
+msgid "Save layout"
+msgstr "Сохранить схему"
+
+msgid "Section name"
+msgstr "Название участка"
+
+msgid "Section range exceeds the WLED LED count"
+msgstr "Диапазон участка выходит за число диодов WLED"
+
+msgid "Section ranges overlap"
+msgstr "Диапазоны участков пересекаются"
+
+msgid "Select a USB port"
+msgstr "Выберите USB-порт"
+
+msgid "Select a USB serial port from the list"
+msgstr "Выберите USB serial-порт из списка"
+
+msgid "Select a controller first"
+msgstr "Сначала выберите контроллер"
+
+msgid "Sensitivity"
+msgstr "Чувствительность"
+
+msgid "Set the total LED count and outputs in WLED. Arrange those LEDs here."
+msgstr "Общее число и выходы настраиваются в WLED. Здесь задаётся расположение этих диодов."
+
+msgid "Setting saved, but the device is unavailable"
+msgstr "Настройка сохранена, но устройство недоступно"
+
+msgid "Signals"
+msgstr "Сигналы"
+
+msgid "Slideshow colors"
+msgstr "Цвета слайдшоу"
+
+msgid "Start"
+msgstr "Начало"
+
+msgid "Strip %1"
+msgstr "Лента %1"
+
+msgid "Strip 1"
+msgstr "Лента 1"
+
+msgid "Strip 2"
+msgstr "Лента 2"
+
+msgid "Strips"
+msgstr "Ленты"
+
+msgid "Supported baud rates are 115200 and 921600"
+msgstr "Поддерживаются 115200 и 921600 бод"
+
+msgid "The device did not return its WLED state"
+msgstr "Устройство не вернуло состояние WLED"
+
+msgid "The selected controller changed; reconnect"
+msgstr "Выбранный контроллер изменился; повторите подключение"
+
+msgid "This wallpaper plugin is not supported yet"
+msgstr "Этот плагин обоев пока не поддерживается"
+
+msgid "Top"
+msgstr "Сверху"
+
+msgid "Turn off the equalizer and wait for the volume indicator to finish first"
+msgstr "Сначала выключите эквалайзер и завершите индикатор громкости"
+
+msgid "Turn on the lighting first"
+msgstr "Сначала включите подсветку"
+
+msgid "Turn on the previous lighting and wait for the volume indicator to finish so its color can be restored"
+msgstr "Сначала включите прежнюю ленту и дождитесь окончания индикатора громкости для восстановления цвета"
+
+msgid "Turning off lighting before sleep"
+msgstr "Выключение ленты перед сном"
+
+msgid "Two flashes"
+msgstr "Две вспышки"
+
+msgid "USB communication error"
+msgstr "Ошибка связи по USB"
+
+msgid "USB controller disconnected"
+msgstr "USB-контроллер отключён"
+
+msgid "USB is negotiating speed; try again"
+msgstr "USB согласовывает скорость; повторите запрос"
+
+msgid "USB service is not running: wled-control-usb.service is required"
+msgstr "USB-служба не запущена: нужен wled-control-usb.service"
+
+msgid "USB · %1 · up to 60 FPS"
+msgstr "USB · %1 · до 60 кадров/с"
+
+msgid "USB · LEDs: %1"
+msgstr "USB · Диодов: %1"
+
+msgid "USB: a different controller is connected"
+msgstr "USB: подключён другой контроллер"
+
+msgid "Unknown Picture of the Day provider"
+msgstr "Неизвестный источник картинки дня"
+
+msgid "Unknown USB command"
+msgstr "Неизвестная USB-команда"
+
+msgid "Unknown command"
+msgstr "Неизвестная команда"
+
+msgid "Unknown equalizer palette"
+msgstr "Неизвестная палитра эквалайзера"
+
+msgid "Unknown notification style"
+msgstr "Неизвестный способ уведомления"
+
+msgid "Updating…"
+msgstr "Обновление…"
+
+msgid "Use 1–128 nonempty sections within the LED count"
+msgstr "Нужно от 1 до 128 непустых участков в пределах числа диодов"
+
+msgid "Value must be an integer from %1 to %2"
+msgstr "Значение должно быть целым числом от %1 до %2"
+
+msgid "Violet"
+msgstr "Фиолетовая"
+
+msgid "Volume indicator"
+msgstr "Индикатор громкости"
+
+msgid "WLED IP address or hostname"
+msgstr "IP или имя WLED"
+
+msgid "WLED LED count changed; check the layout and reconnect"
+msgstr "Число диодов WLED изменилось; проверьте схему и подключитесь снова"
+
+msgid "WLED did not confirm the power change"
+msgstr "WLED не подтвердил переключение питания"
+
+msgid "WLED did not respond at 115200 or 921600 baud"
+msgstr "WLED не ответил ни на 115200, ни на 921600 бод"
+
+msgid "WLED response is too large"
+msgstr "Слишком большой ответ WLED"
+
+msgid "WLED with 1–1024 RGB LEDs is required"
+msgstr "Нужен WLED с 1–1024 RGB-диодами"
+
+msgid "Wait for the volume indicator to finish"
+msgstr "Дождитесь окончания индикатора громкости"
+
+msgid "Waiting for lighting to turn on or the volume indicator to finish"
+msgstr "Ожидание включения ленты или окончания индикатора громкости"
+
+msgid "Wallpaper colors"
+msgstr "Цвета обоев"
+
+msgid "Wallpaper file is too large to analyze"
+msgstr "Файл обоев слишком большой для анализа"
+
+msgid "Wallpaper image is too large to analyze"
+msgstr "Изображение обоев слишком большое для анализа"
+
+msgid "Wallpaper plugin changed — waiting for KDE settings to update"
+msgstr "Плагин обоев сменился — ожидаем обновления настроек KDE"
+
+msgid "Wallpaper unavailable — classic palette"
+msgstr "Обои недоступны — классическая палитра"
+
+msgid "Warm white"
+msgstr "Тёплый белый"
+
+msgid "fast response"
+msgstr "быстрый отклик"
+
+msgid "smooth response"
+msgstr "плавный отклик"

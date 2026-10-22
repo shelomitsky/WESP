@@ -1,0 +1,4 @@
+# Core Python packages. Desktop/DBus/GI dependencies are described in README.
+numpy>=1.24
+pyserial>=3.5
+Pillow>=9.1
