@@ -154,16 +154,17 @@ class ConfigurationTest(unittest.TestCase):
                     control.write_json(paths[0],dict(controller=dict(port='/dev/ttyUSB8',mac='021122334455',count=2)))
                     control.write_json(paths[1],dict(controller_mac='021122334455',base={'4':dict(fx=9)}))
                 before={path:path.read_bytes() if path.exists() else None for path in paths}
-                original_replace=os.replace
+                original_replace=Path.replace
                 failed=[]
                 def replace(source,target):
                     if Path(target)==paths[0] and not failed:
                         failed.append(True)
                         raise OSError('injected settings commit failure')
                     return original_replace(source,target)
-                with patch.object(control.os,'replace',side_effect=replace):
+                with patch.object(Path,'replace',replace):
                     with self.assertRaises(OSError):
                         control.persist_enrollment(selected)
+                self.assertEqual(failed,[True])
                 for path,data in before.items():
                     self.assertEqual(path.read_bytes() if path.exists() else None,data)
                 self.assertEqual(list(self.root.rglob('.wesp-enroll-*')),[])
