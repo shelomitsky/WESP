@@ -11,6 +11,17 @@ import firmware
 
 
 class FirmwareTest(unittest.TestCase):
+    def test_previous_failed_read_uses_base_baud_on_next_prepare(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            firmware.save_job(root,dict(stage='failed',error='ROM read failed',backup_baud=460800))
+            with patch.object(firmware,'state_root',return_value=root), \
+                 patch.object(firmware,'validate_port',return_value=dict(port='/dev/ttyUSB0')), \
+                 patch.object(firmware.subprocess,'Popen',return_value=Mock(pid=123)), \
+                 patch.object(firmware,'process_stamp',return_value='test'):
+                result=firmware.start('prepare','/dev/ttyUSB0')
+            self.assertEqual(result['backup_start_baud'],115200)
+
     def test_backup_read_error_restarts_once_at_base_speed_and_checks_chip_digest(self):
         image=b'x'*firmware.FLASH_SIZE
         esp=Mock()
@@ -19,6 +30,9 @@ class FirmwareTest(unittest.TestCase):
         result=firmware.read_verified_backup(esp,Mock(),(OSError,))
         self.assertEqual(result,image)
         esp.change_baud.assert_called_once_with(115200)
+        esp.flush_input.assert_called_once()
+        esp.connect.assert_called_once_with(mode='no_reset',attempts=1,warnings=False)
+        esp.flash_set_parameters.assert_called_once_with(firmware.FLASH_SIZE)
         self.assertEqual(esp.read_flash.call_count,2)
         esp.flash_md5sum.assert_called_once_with(0,firmware.FLASH_SIZE)
 

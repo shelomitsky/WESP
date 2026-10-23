@@ -183,13 +183,16 @@ def start(action, value):
         if data['stage'] in BUSY:
             raise ValueError(tr('A controller installation is already running'))
         if action in ('prepare','prepare-native'):
+            slow_backup=(data.get('backup_baud')==115200 or
+                         (data['stage']=='failed' and bool(data.get('error'))))
             native=action=='prepare-native'
             action='prepare'
             identity=validate_port(value)
             folder=root/uuid.uuid4().hex
             folder.mkdir(mode=0o700)
             data=dict(stage='starting', port=value, identity=identity, folder=str(folder),
-                      version=VERSION, percent=0, active=[], error='')
+                      version=VERSION, percent=0, active=[], error='',
+                      backup_start_baud=115200 if slow_backup else 460800)
             if native:
                 import receiver_assets
                 manifest=receiver_assets.stage(Path(__file__).resolve().parent/'receiver-firmware',folder)
@@ -284,8 +287,13 @@ def read_verified_backup(esp, progress, retry_errors):
                 raise
             # Reuse the same exclusive connection and pinned board. Clear any
             # trailing reply before the baud-change command, then start at 0.
-            esp._port.reset_input_buffer()
+            # Reset esptool's SLIP decoder too: clearing only pyserial leaves
+            # its suspended generator inside the failed response packet.
+            esp.flush_input()
+            esp.connect(mode='no_reset',attempts=1,warnings=False)
             esp.change_baud(115200)
+            esp.flash_spi_attach(0)
+            esp.flash_set_parameters(FLASH_SIZE)
             print('Restarting read-only backup at 115200 baud',flush=True)
             progress(0,FLASH_SIZE)
 
@@ -304,10 +312,10 @@ def operate(root, data, action):
         esp.flash_spi_attach(0)
         esp.flash_set_parameters(FLASH_SIZE)
         board=board_info(esp)
-        esp.change_baud(460800)
+        esp.change_baud(data.get('backup_start_baud',460800) if action=='prepare' else 460800)
         if action == 'prepare':
             data['board']=board
-            stage(root, data, 'backup', percent=0)
+            stage(root, data, 'backup', percent=0,backup_baud=esp._port.baudrate)
             updated=[0.0]
             def progress(done, length):
                 if time.monotonic()-updated[0] > 1 or done == length:
