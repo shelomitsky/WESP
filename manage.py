@@ -63,8 +63,14 @@ def payloads():
     app=p['data']/'wled-control'
     result={}
     for name in ('control.py','equalizer.py','usb_transport.py','usb_probe.py','events.py',
-                 'layout.py','notification_fx.py','wallpaper.py','i18n.py','services.py','firmware.py','manage.py','LICENSE','README.md'):
+                 'layout.py','notification_fx.py','wallpaper.py','i18n.py','services.py','firmware.py',
+                 'wesp_transport.py','receiver_setup.py','receiver_assets.py','manage.py','LICENSE','README.md'):
         result[app/name]=((SOURCE/name).read_bytes(),0o644)
+    if (SOURCE/'receiver-firmware/manifest.json').exists():
+        import receiver_assets
+        receiver_assets.validated(SOURCE/'receiver-firmware')
+        for name in ['manifest.json',*receiver_assets.OFFSETS]:
+            result[app/'receiver-firmware'/name]=((SOURCE/'receiver-firmware'/name).read_bytes(),0o600)
     for catalog in (SOURCE/'locale').glob('*/LC_MESSAGES/plasma_applet_org.wledcontrol.desktop.mo'):
         relative=catalog.relative_to(SOURCE/'locale')
         data=catalog.read_bytes()

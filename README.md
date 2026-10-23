@@ -4,14 +4,14 @@
 [CI runs](https://github.com/shelomitsky/WESP/actions)
 
 Desktop ambient lighting for music, wallpapers and system events.
-The first alpha supports Linux/KDE Plasma 6 and WLED controllers.
+The first alpha supports Linux/KDE Plasma 6, existing WLED controllers and an experimental WESP USB/Wi-Fi receiver.
 Support for other desktop environments is planned after the KDE alpha.
 
 Author: **Chapman**. Licensed under MIT. Please credit Chapman when sharing
 screenshots, builds or articles about this project; retain the copyright and
 license notices when distributing its code.
 
-**0.2.0-alpha.6: local release candidate.** Generalized device/layout support and
+**0.2.0-alpha.7: local release candidate.** Generalized device/layout support and
 the new installer have automated checks. A fresh KDE session and physical LEDs
 still need acceptance before a public release. This candidate does not replace
 an existing installation automatically and has not been published.
@@ -45,7 +45,37 @@ hardware acceptance. Positions are saved for future wallpaper mapping.
 custom receiver firmware. KDE accent color is a
 separate existing mode. No screen recording or microphone capture is used.
 
-## First installation on a new ESP
+## WESP receiver: USB setup, separate power and Wi-Fi
+
+The experimental receiver firmware is separate from WLED. Keep an accepted WLED
+board unchanged; select a separate classic 4 MB ESP32 for receiver testing.
+Build it with `python3 build_native_receiver.py --output-dir /path/outside/source`.
+The pinned PlatformIO build never opens a serial port. A desktop bundle can be
+built by `build_release.build(output, receiver=assets_directory)`; compiled images
+are checksum-verified optional release assets, never committed source binaries.
+
+In **Device and strips**, choose **Install WESP firmware (USB + Wi-Fi)**,
+wait for a complete backup and confirm replacement on the identified test board.
+After installation choose **Read WESP receiver**, add physical outputs and set
+GPIO, LED count, RGB color order and LED current limit. There are no default pins.
+Enter the Wi-Fi network/password in the widget and save. Passwords are sent over
+a private authenticated loopback bridge and USB, never shell arguments or logs.
+Then **Check Wi-Fi** and **Use Wi-Fi** verify the same MAC and pairing key over
+TCP. Only after that disconnect USB and power the board from a suitable separate
+supply. Pairing credentials stay in a separate private desktop file. Stable
+`wesp-<MAC suffix>.local` discovery has the paired IP as fallback.
+
+The receiver has one firmware for USB and Wi-Fi: RGB frames and static colors are
+computed on the PC. On boot, Off or loss of valid PC frames, outputs are black.
+The internal 1.2-second watchdog reserves time for physical output within the
+1.5-second acceptance target. Physical timing still needs measurement. WLED
+effects/segments are not implemented by this receiver; the desktop adapter
+provides a single static RGB segment for its own compositor.
+
+This candidate requires real board, Wi-Fi and separate-power acceptance before
+public release. Passing compilation or protocol tests is not that acceptance.
+
+## First installation of WLED on a new ESP
 
 In **Device and strips**, select the USB port and choose **Install WLED on a new ESP**.
 The wizard creates a private esptool 4.11.0 environment, downloads checksum-pinned

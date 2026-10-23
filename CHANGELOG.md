@@ -1,3 +1,12 @@
+# 0.2.0-alpha.7 (candidate)
+
+- Add a separate WESP receiver firmware with USB setup, Wi-Fi control, configured
+  RGB outputs, current limits and fail-dark behavior when PC frames stop.
+- Preserve the existing WLED backend and flashing choice for existing boards.
+- Add widget setup of physical GPIO/count/color order and Wi-Fi without exposing
+  passwords in shell arguments, logs or ordinary status responses.
+- Add pinned ESP32 compilation and optional checksum-verified firmware bundles.
+
 # 0.2.0-alpha.6 (candidate)
 
 - Add a widget wizard for first installation of WLED on an unencrypted classic 4MB ESP32: private tooling, checksum-pinned images, full flash backup, explicit replacement confirmation and guarded normal enrollment.

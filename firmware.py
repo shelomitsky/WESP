@@ -182,12 +182,18 @@ def start(action, value):
             raise ValueError(tr('Could not restart WESP services'))
         if data['stage'] in BUSY:
             raise ValueError(tr('A controller installation is already running'))
-        if action == 'prepare':
+        if action in ('prepare','prepare-native'):
+            native=action=='prepare-native'
+            action='prepare'
             identity=validate_port(value)
             folder=root/uuid.uuid4().hex
             folder.mkdir(mode=0o700)
             data=dict(stage='starting', port=value, identity=identity, folder=str(folder),
                       version=VERSION, percent=0, active=[], error='')
+            if native:
+                import receiver_assets
+                manifest=receiver_assets.stage(Path(__file__).resolve().parent/'receiver-firmware',folder)
+                data.update(flavor='wesp',version=manifest['version'])
         elif action == 'install':
             if data['stage'] != 'prepared' or value != data.get('token'):
                 raise ValueError(tr('Prepare the board before confirming installation'))
@@ -291,7 +297,11 @@ def operate(root, data, action):
         else:
             validate_board(board, expected=data['board'])
             check_file(Path(data['backup']), data['backup_sha256'], size=FLASH_SIZE)
-            combined=merged_image(Path(data['folder']))
+            if data.get('flavor')=='wesp':
+                import receiver_assets
+                combined=receiver_assets.merged(Path(data['folder']))
+            else:
+                combined=merged_image(Path(data['folder']))
             stage(root, data, 'writing', percent=0)
             # The 4 MB merged image resets stale configuration too. esptool's
             # normal MD5 verification covers the complete image before success.
@@ -331,7 +341,7 @@ def launch(action):
     try:
         stage(root, data, 'tools')
         python=tool_python()
-        if action == 'prepare':
+        if action == 'prepare' and data.get('flavor')!='wesp':
             stage(root, data, 'download')
             download_images(Path(data['folder']))
         # exec keeps PID/starttime stable for crash recovery polling.

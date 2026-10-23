@@ -149,3 +149,16 @@ size/digest, pinned downloads, one ROM connection for identity and write, foreig
 port owners, failed service recovery and automatic connection with a pinned MAC
 while excluding a concurrent preparation job. Source/backend checks do not accept
 physical lighting or the visible wizard. Real board/UI acceptance is pending.
+
+## USB/Wi-Fi receiver candidate (2026-10-24)
+
+Receiver safety core is compiled and run with address/undefined-behavior
+sanitizers. Tests cover complete RGB validation, watchdog/off, ownership,
+inactivity framing and current limits. Native host tests use actual loopback
+TCP for sessions, credentials, identity, count and reply guards, reconnection,
+static colors and explicit frame maintenance. The local setup bridge is tested
+for authentication and credential redaction. ESP32 compilation is an independent
+CI job without device access. Firmware assets are built outside the worktree.
+
+Physical LEDs, actual USB/Wi-Fi handoff, standalone supply and measured PC-off
+dark behavior remain separate acceptance and must be recorded explicitly.

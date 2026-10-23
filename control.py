@@ -399,6 +399,9 @@ def execute(args):
     if cmd == 'enroll':
         import usb_transport
         expected=json.loads(args[2]) if len(args)>2 else None
+        selected=prefs.get('controller') or {}
+        if expected is None and selected.get('backend')=='wesp' and selected.get('port')==args[1]:
+            expected=dict(backend='wesp',mac=selected['mac'])
         if expected is not None and (not isinstance(expected,dict)
                 or not re.fullmatch(r'[0-9a-f]{12}',expected.get('mac',''))
                 or ('count' in expected and (type(expected['count']) is not int or not 1<=expected['count']<=1024))):
@@ -573,6 +576,18 @@ def execute(args):
 
 
 def dispatch(args):
+    if args[:1]==['firmware-native-ready']:
+        import firmware
+        root=firmware.state_root()
+        with firmware.job_lock(root):
+            data=firmware.read_job(root)
+            if len(args)!=2 or data.get('token')!=args[1] or data.get('flavor')!='wesp' or data['stage']!='flashed':
+                raise ValueError(tr("Prepare the board before confirming installation"))
+            firmware.stage(root,data,'installed')
+        return dict(ok=True,firmware=data)
+    if args[:1]==['receiver-setup-link']:
+        import receiver_setup
+        return dict(ok=True,setup=read_json(RUNTIME/'receiver-setup.json',{}))
     if args[:1] == ['firmware-connect']:
         import firmware
         root=firmware.state_root()
@@ -599,7 +614,7 @@ def dispatch(args):
     if args[:1] == ['firmware-status']:
         import firmware
         return dict(ok=True, firmware=firmware.status())
-    if args[:1] in (['firmware-prepare'], ['firmware-install'], ['firmware-cancel']):
+    if args[:1] in (['firmware-prepare'], ['firmware-prepare-native'], ['firmware-install'], ['firmware-cancel']):
         import firmware
         if len(args) != 2:
             raise ValueError(tr("Prepare the board before confirming installation"))

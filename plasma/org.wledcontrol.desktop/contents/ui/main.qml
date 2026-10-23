@@ -44,6 +44,51 @@ PlasmoidItem {
     property var firmwareJob: ({stage: "idle"})
     readonly property bool firmwareBusy: ["starting", "tools", "download", "detecting", "backup", "writing", "connecting"].indexOf(firmwareJob.stage) >= 0
     property bool firmwareConfirmed: false
+    property var setupEndpoint: ({})
+    property string pendingSetupAction: ""
+    property var receiverInfo: ({})
+    property var receiverOutputs: []
+
+    function editOutput(index,key,value) {
+        var copy=JSON.parse(JSON.stringify(receiverOutputs));
+        copy[index][key]=value; receiverOutputs=copy;
+    }
+    function setupRequest(action) {
+        if (busy || firmwareBusy) return;
+        if (!setupEndpoint.url) {
+            pendingSetupAction=action;
+            request(["receiver-setup-link"]);
+            return;
+        }
+        var payload={action:action,port:selectedPort,mac:receiverInfo.mac || ""};
+        if (action === "configure") {
+            payload.outputs=receiverOutputs;
+            payload.max_milliamps=currentBudget.value;
+            if (wifiSsid.text.length) { payload.ssid=wifiSsid.text; payload.password=wifiPassword.text; }
+        }
+        var xhr=new XMLHttpRequest();
+        busy=true;
+        xhr.onreadystatechange=function() {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return;
+            try {
+                var reply=JSON.parse(xhr.responseText);
+                if (!reply.ok) throw new Error("setup failed");
+                receiverInfo=reply.receiver;
+                if (action !== "status" && action !== "wifi") receiverOutputs=JSON.parse(JSON.stringify(receiverInfo.outputs || []));
+                if (action === "configure") wifiPassword.text="";
+                errorText="";
+            } catch(e) {
+                errorText=i18nd("plasma_applet_org.wledcontrol.desktop", "Could not configure the receiver. Check the USB connection, GPIOs and network settings.");
+                setupEndpoint=({});
+            }
+            busy=false;
+            if (action === "configure" || action === "wifi") request(["status"]);
+        };
+        xhr.open("POST",setupEndpoint.url);
+        xhr.setRequestHeader("Content-Type","application/json");
+        xhr.setRequestHeader("Authorization","Bearer "+setupEndpoint.bearer);
+        xhr.send(JSON.stringify(payload));
+    }
     property var sections: []
     property var draftSections: []
     property bool layoutDirty: false
@@ -97,12 +142,20 @@ PlasmoidItem {
         runner.connectSource(source);
     }
     function acceptResult(data) {
+        if (data.setup && data.setup.url) {
+            setupEndpoint=data.setup;
+            var action=pendingSetupAction; pendingSetupAction="";
+            if (action) Qt.callLater(function(){root.setupRequest(action);});
+        }
         if (data.firmware) {
             var previous = firmwareJob.stage;
             firmwareJob = data.firmware;
             if (previous !== firmwareJob.stage) firmwareConfirmed = false;
             if (firmwareJob.stage === "flashed" && previous !== "flashed") {
-                root.request(["firmware-connect", firmwareJob.token]);
+                if (firmwareJob.flavor === "wesp") {
+                    root.settingsExpanded=true; root.settingsPage=2;
+                    root.request(["firmware-native-ready",firmwareJob.token]);
+                } else root.request(["firmware-connect", firmwareJob.token]);
             }
         }
         if (data.wallpaper) {
@@ -147,7 +200,7 @@ PlasmoidItem {
         connectedSources: []
         onNewData: function(sourceName, data) {
             disconnectSource(sourceName);
-            var refresh = root.activeCommand[0] !== "status" && root.activeCommand[0].indexOf("firmware-") !== 0;
+            var refresh = root.activeCommand[0] !== "status" && root.activeCommand[0] !== "receiver-setup-link" && root.activeCommand[0].indexOf("firmware-") !== 0;
             try {
                 var result = JSON.parse(data["stdout"]);
                 root.acceptResult(result);
@@ -613,6 +666,86 @@ PlasmoidItem {
                     onClicked: root.request(["enroll", root.selectedPort])
                 }
                 QQC2.Button {
+                    text: i18nd("plasma_applet_org.wledcontrol.desktop", "Install WESP firmware (USB + Wi-Fi)")
+                    Layout.fillWidth: true
+                    enabled: root.selectedPort.length > 0 && !root.busy && !root.firmwareBusy && root.firmwareJob.stage !== "prepared"
+                    onClicked: root.request(["firmware-prepare-native",root.selectedPort])
+                }
+                QQC2.Button {
+                    text: i18nd("plasma_applet_org.wledcontrol.desktop", "Read WESP receiver")
+                    Layout.fillWidth:true
+                    enabled: root.selectedPort.length > 0 && !root.busy && !root.firmwareBusy
+                    onClicked: root.setupRequest("probe")
+                }
+                QQC2.GroupBox {
+                    title: i18nd("plasma_applet_org.wledcontrol.desktop", "WESP receiver: outputs and Wi-Fi")
+                    Layout.fillWidth: true
+                    visible: !!root.receiverInfo.mac || (root.firmwareJob.flavor === "wesp" && ["flashed","installed","connected"].indexOf(root.firmwareJob.stage)>=0)
+                    contentItem: ColumnLayout {
+                        QQC2.Label {
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap
+                            text: i18nd("plasma_applet_org.wledcontrol.desktop", "Read the receiver over USB, configure the LED outputs and Wi-Fi, then verify Wi-Fi before disconnecting USB. No frames from the PC: lights off within 1.5 seconds.")
+                        }
+                        QQC2.Label {
+                            visible: !!root.receiverInfo.mac
+                            text: "ESP: "+(root.receiverInfo.mac || "")
+                        }
+                        Repeater {
+                            model: root.receiverOutputs
+                            delegate: ColumnLayout {
+                                required property int index
+                                required property var modelData
+                                Layout.fillWidth: true
+                                RowLayout {
+                                    QQC2.Label { text: "GPIO" }
+                                    QQC2.SpinBox { from:0; to:33; value:modelData.gpio; editable:true; enabled:!root.busy; onValueModified:root.editOutput(index,"gpio",value) }
+                                    QQC2.Label { text:i18nd("plasma_applet_org.wledcontrol.desktop", "LEDs") }
+                                    QQC2.SpinBox { from:1; to:1024; value:modelData.count; editable:true; enabled:!root.busy; onValueModified:root.editOutput(index,"count",value) }
+                                }
+                                RowLayout {
+                                    QQC2.ComboBox {
+                                        model:["RGB","RBG","GRB","GBR","BRG","BGR"]
+                                        currentIndex:model.indexOf(modelData.order)
+                                        enabled:!root.busy
+                                        onActivated:root.editOutput(index,"order",currentText)
+                                    }
+                                    QQC2.Button {
+                                        text:i18nd("plasma_applet_org.wledcontrol.desktop", "Remove output")
+                                        enabled:!root.busy
+                                        onClicked:{ var copy=JSON.parse(JSON.stringify(root.receiverOutputs)); copy.splice(index,1); root.receiverOutputs=copy; }
+                                    }
+                                }
+                            }
+                        }
+                        QQC2.Button {
+                            text:i18nd("plasma_applet_org.wledcontrol.desktop", "Add LED output")
+                            enabled:!!root.receiverInfo.mac && root.receiverOutputs.length<8 && !root.busy
+                            onClicked:{var copy=JSON.parse(JSON.stringify(root.receiverOutputs)); copy.push({gpio:0,count:1,order:"GRB"}); root.receiverOutputs=copy;}
+                        }
+                        RowLayout {
+                            QQC2.Label {text:i18nd("plasma_applet_org.wledcontrol.desktop", "LED current limit, mA")}
+                            QQC2.SpinBox { id:currentBudget; from:100; to:5000; stepSize:100; value:root.receiverInfo.max_milliamps || 500; editable:true; enabled:!root.busy }
+                        }
+                        QQC2.TextField { id:wifiSsid; Layout.fillWidth:true; placeholderText:i18nd("plasma_applet_org.wledcontrol.desktop", "Wi-Fi network name (optional)"); enabled:!root.busy }
+                        QQC2.TextField { id:wifiPassword; Layout.fillWidth:true; placeholderText:i18nd("plasma_applet_org.wledcontrol.desktop", "Wi-Fi password"); echoMode:TextInput.Password; enabled:!root.busy }
+                        QQC2.Button {
+                            text:i18nd("plasma_applet_org.wledcontrol.desktop", "Save outputs and network to ESP")
+                            enabled:!!root.receiverInfo.mac && root.receiverOutputs.length>0 && !root.busy && !root.firmwareBusy
+                            onClicked:root.setupRequest("configure")
+                        }
+                        QQC2.Label {
+                            Layout.fillWidth:true; wrapMode:Text.WordWrap
+                            text:root.receiverInfo.wifi && root.receiverInfo.wifi.connected
+                                ? i18nd("plasma_applet_org.wledcontrol.desktop", "Wi-Fi connected: %1",root.receiverInfo.wifi.ip)
+                                : i18nd("plasma_applet_org.wledcontrol.desktop", "Wi-Fi is not connected yet")
+                        }
+                        RowLayout {
+                            QQC2.Button {text:i18nd("plasma_applet_org.wledcontrol.desktop", "Check Wi-Fi"); enabled:!!root.receiverInfo.mac && !root.busy; onClicked:root.setupRequest("status")}
+                            QQC2.Button {text:i18nd("plasma_applet_org.wledcontrol.desktop", "Use Wi-Fi"); enabled:!!root.receiverInfo.mac && !root.busy && !!root.receiverInfo.wifi && root.receiverInfo.wifi.connected; onClicked:root.setupRequest("wifi")}
+                        }
+                    }
+                }
+                QQC2.Button {
                     text: i18nd("plasma_applet_org.wledcontrol.desktop", "Install WLED on a new ESP")
                     Layout.fillWidth: true
                     enabled: root.selectedPort.length > 0 && !root.busy && !root.firmwareBusy && root.firmwareJob.stage !== "prepared"
@@ -627,7 +760,9 @@ PlasmoidItem {
                         case "download": return i18nd("plasma_applet_org.wledcontrol.desktop", "Downloading verified WLED firmware…");
                         case "detecting": return i18nd("plasma_applet_org.wledcontrol.desktop", "Checking the selected ESP…");
                         case "backup": return i18nd("plasma_applet_org.wledcontrol.desktop", "Saving the original firmware: %1%. This may take several minutes.", root.firmwareJob.percent || 0);
-                        case "writing": return i18nd("plasma_applet_org.wledcontrol.desktop", "Installing WLED. Keep the USB cable connected…");
+                        case "writing": return root.firmwareJob.flavor === "wesp"
+                            ? i18nd("plasma_applet_org.wledcontrol.desktop", "Installing WESP. Keep the USB cable connected…")
+                            : i18nd("plasma_applet_org.wledcontrol.desktop", "Installing WLED. Keep the USB cable connected…");
                         default: return i18nd("plasma_applet_org.wledcontrol.desktop", "Starting the installer…");
                         }
                     }
@@ -641,7 +776,7 @@ PlasmoidItem {
                 QQC2.Label {
                     visible: root.firmwareJob.stage === "prepared"
                     Layout.fillWidth: true; wrapMode: Text.WordWrap
-                    text: i18nd("plasma_applet_org.wledcontrol.desktop", "ESP32 · %1 · %2\nWLED %3\nOriginal firmware saved to: %4", root.firmwareJob.port || "", root.firmwareJob.board ? root.firmwareJob.board.mac : "", root.firmwareJob.version || "", root.firmwareJob.backup || "")
+                    text: i18nd("plasma_applet_org.wledcontrol.desktop", "ESP32 · %1 · %2\nFirmware %3\nOriginal firmware saved to: %4", root.firmwareJob.port || "", root.firmwareJob.board ? root.firmwareJob.board.mac : "", (root.firmwareJob.flavor === "wesp" ? "WESP " : "WLED ")+(root.firmwareJob.version || ""), root.firmwareJob.backup || "")
                 }
                 QQC2.CheckBox {
                     visible: root.firmwareJob.stage === "prepared"
@@ -653,7 +788,7 @@ PlasmoidItem {
                 RowLayout {
                     visible: root.firmwareJob.stage === "prepared"
                     QQC2.Button {
-                        text: i18nd("plasma_applet_org.wledcontrol.desktop", "Install WLED")
+                        text: root.firmwareJob.flavor === "wesp" ? i18nd("plasma_applet_org.wledcontrol.desktop", "Install WESP") : i18nd("plasma_applet_org.wledcontrol.desktop", "Install WLED")
                         enabled: root.firmwareConfirmed && !root.busy
                         onClicked: root.request(["firmware-install", root.firmwareJob.token])
                     }
@@ -668,7 +803,9 @@ PlasmoidItem {
                     Layout.fillWidth: true; wrapMode: Text.WordWrap
                     text: root.firmwareJob.stage === "failed"
                         ? i18nd("plasma_applet_org.wledcontrol.desktop", "Installation failed: %1\nBackup: %2", root.firmwareJob.error || "", root.firmwareJob.backup || "—")
-                        : i18nd("plasma_applet_org.wledcontrol.desktop", "WLED installed. Connect the controller, then set up the LED outputs in WLED before attaching a strip.")
+                        : root.firmwareJob.flavor === "wesp"
+                            ? i18nd("plasma_applet_org.wledcontrol.desktop", "WESP installed. Read the receiver above, then save its outputs and network.")
+                            : i18nd("plasma_applet_org.wledcontrol.desktop", "WLED installed. Connect the controller, then set up the LED outputs in WLED before attaching a strip.")
                 }
                 QQC2.Label { text: i18nd("plasma_applet_org.wledcontrol.desktop", "LEDs: %1", root.ledCount) }
                 QQC2.Label {

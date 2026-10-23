@@ -1,6 +1,6 @@
 # Release candidate acceptance
 
-Product: WESP. Version: 0.2.0-alpha.5. Author: Chapman. License: MIT.
+Product: WESP. Version: 0.2.0-alpha.7. Author: Chapman. License: MIT.
 The first alpha targets KDE Plasma 6; the product name is desktop-independent.
 
 ## Implemented and automated
@@ -80,3 +80,15 @@ for arbitrary controllers or a fresh desktop from it or from automated tests.
 Explicit main-mode selection, manual RGB and a standalone wallpaper mode; spatial wallpaper-to-section mapping; measured latency and Wi-Fi DDP; optional
 firmware workflow. These remain future work. Global wallpaper palette extraction
 and standard slideshow following are already implemented.
+
+## Experimental native receiver acceptance (open)
+
+- [ ] Install native firmware from the widget on the explicitly selected test ESP.
+- [ ] Configure real GPIO/count/order/current limit through USB widget setup.
+- [ ] Join Wi-Fi, verify MAC/token over TCP and stable hostname/IP fallback.
+- [ ] Move to a separate suitable power supply and verify real lighting.
+- [ ] Stop the PC sender and measure physical dark within the 1.5-second target.
+- [ ] Test reboot, USB/network interruptions, wrong identity and configuration recovery.
+
+ESP32 compile and native host/safety tests do not close these physical gates.
+The previously accepted WLED board must remain unchanged.

@@ -297,8 +297,15 @@ def serve():
     import control
     prefs = control.settings()
     configured = prefs.get('controller')
-    device = Device(configured['port'], expected_mac=configured['mac'],
-                    led_count=configured['count']) if configured else None
+    def selected_device(selected):
+        if selected.get('backend')=='wesp':
+            import wesp_transport
+            return wesp_transport.Device(selected.get('port'),expected_mac=selected['mac'],
+                    led_count=selected['count'],host=selected.get('host'),
+                    fallback_host=selected.get('fallback_host'),
+                    connection=selected.get('connection','usb'))
+        return Device(selected['port'],expected_mac=selected['mac'],led_count=selected['count'])
+    device = selected_device(configured) if configured else None
     device_lock = threading.RLock()
     stop = threading.Event()
 
@@ -321,18 +328,92 @@ def serve():
                 finally:
                     old.close()
             pinned=command.get('expected')
-            candidate=Device(port,expected_mac=pinned['mac'] if pinned else None,
+            device_class=Device
+            if pinned and pinned.get('backend')=='wesp':
+                import wesp_transport
+                device_class=wesp_transport.Device
+            candidate=device_class(port,expected_mac=pinned['mac'] if pinned else None,
                              led_count=pinned.get('count') if pinned else None,
                              discover=not pinned or 'count' not in pinned)
             try:
                 candidate.query()
                 selected=dict(port=port,mac=candidate.expected_mac,count=candidate.led_count)
+                if device_class is not Device:
+                    selected.update(backend='wesp',connection='usb')
                 control.persist_enrollment(selected)
             except Exception:
                 candidate.close()
                 raise
             device=candidate
             return selected
+
+    def receiver_setup(command):
+        """Called only by the authenticated local UI bridge, never a shell arg."""
+        nonlocal device
+        import wesp_transport
+        action=command.get('action')
+        if action not in ('probe','status','configure','wifi'):
+            raise ValueError('Unknown receiver setup action')
+        with control.locked():
+            with device_lock:
+                if action=='probe':
+                    import re
+                    port=command.get('port','')
+                    if not re.fullmatch(r'/dev/tty(?:USB|ACM)[0-9]+',port):
+                        raise ValueError('Invalid USB port')
+                    old=device
+                    if old is not None:
+                        old.close()
+                    candidate=wesp_transport.Device(port,discover=True)
+                    try:
+                        result=candidate.setup_status()
+                        candidate.pair()
+                    except Exception:
+                        candidate.close()
+                        raise
+                    device=candidate
+                    return result
+                if not isinstance(device,wesp_transport.Device) or command.get('mac')!=device.expected_mac:
+                    raise ValueError('Select and read the USB receiver first')
+                if action=='status':
+                    return device.setup_status()
+                target=device
+                if action=='configure':
+                    if device.connection!='usb':
+                        raise ValueError('Use USB to configure this receiver')
+                    wesp_transport.validate_outputs(command.get('outputs'),command.get('max_milliamps',500))
+            # Restore overlays only after the action/target has been validated,
+            # outside device_lock because restoration may use the owner RPC.
+            control.prepare_enrollment()
+            with device_lock:
+                if device is not target or command.get('mac')!=device.expected_mac:
+                    raise ValueError('The receiver changed during setup')
+                if action=='configure':
+                    result=device.configure(command.get('outputs'),command.get('max_milliamps',500),
+                                            ssid=command.get('ssid'),password=command.get('password'))
+                    selected=dict(port=device.port,mac=device.expected_mac,count=device.led_count,
+                                  backend='wesp',connection='usb')
+                    control.persist_enrollment(selected)
+                    return result
+                info=device.setup_status()
+                wifi=info['wifi']
+                if not wifi.get('connected') or not wifi.get('ip'):
+                    raise ValueError('The receiver has not joined Wi-Fi yet')
+                candidate=wesp_transport.Device(device.port,expected_mac=device.expected_mac,
+                    led_count=device.led_count,host=wifi.get('host') or wifi['ip'],
+                    fallback_host=wifi['ip'],connection='wifi')
+                try:
+                    result=candidate.setup_status()
+                    selected=dict(port=device.port,mac=device.expected_mac,count=device.led_count,
+                        backend='wesp',connection='wifi',host=wifi.get('host') or wifi['ip'],
+                        fallback_host=wifi['ip'])
+                    control.persist_enrollment(selected)
+                except Exception:
+                    candidate.close()
+                    raise
+                device.close()
+                device=candidate
+                return result
 
     class Handler(socketserver.StreamRequestHandler):
         def handle(self):
@@ -373,10 +454,12 @@ def serve():
             try:
                 with device_lock:
                     if device is not None:
+                        if hasattr(device,'maintain'):
+                            device.maintain()
                         device.query()
             except Exception:
                 LOG.exception('USB state refresh failed; retrying')
-            stop.wait(1)
+            stop.wait(.25 if device is not None and hasattr(device,'maintain') else 1)
 
     def finish(*_):
         stop.set()
@@ -392,6 +475,8 @@ def serve():
         server = socketserver.ThreadingUnixStreamServer(str(path), Handler)
         path.chmod(0o600)
         server.timeout = .2
+        import receiver_setup as setup_module
+        bridge=setup_module.Bridge(path.parent,receiver_setup)
         poller = threading.Thread(target=refresh, daemon=True)
         poller.start()
         try:
@@ -399,11 +484,14 @@ def serve():
                 server.handle_request()
         finally:
             stop.set()
+            bridge.close()
             # Join request threads before closing/reconfiguring their Device.
             server.server_close()
             poller.join(timeout=5)
             try:
-                if device is not None and device.serial is not None:
+                if device is not None and hasattr(device,'maintain'):
+                    device.query({'on':False})
+                elif device is not None and getattr(device,'serial',None) is not None:
                     device.query({'live': False})
                     device.set_baud(115200)
             except Exception:
