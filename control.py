@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -77,6 +78,70 @@ def locked(name='command'):
 
 def settings():
     return DEFAULTS | read_json(CONFIG / 'settings.json', {})
+
+
+def persist_enrollment(selected):
+    """Prepare both documents before the USB owner commits its new Device."""
+    import layout
+    prefs=settings()
+    if prefs.get('controller')==selected and prefs.get('sections'):
+        sections=layout.validate(prefs['sections'],selected['count'])
+    else:
+        sections=[dict(id='main',name=tr("Lighting"),start=0,count=selected['count'],
+                       reverse=False,placement='custom')]
+    prefs.update(controller=selected,sections=sections,equalizer=False,transport='usb')
+    documents={RUNTIME/'state.json':dict(ids=[],volumeUntil=0,base={},suspended=False,
+                                        resume=None,controller_mac=selected['mac']),
+               CONFIG/'settings.json':prefs}
+    temporary=[]
+    retained=set()
+    prepared,previous={},{}
+    applied=[]
+
+    def stage(path,data,mode):
+        fd,name=tempfile.mkstemp(prefix='.wesp-enroll-',dir=path.parent)
+        staged=Path(name)
+        temporary.append(staged)
+        with os.fdopen(fd,'wb') as stream:
+            os.fchmod(stream.fileno(),mode)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        return staged
+
+    try:
+        for path,value in documents.items():
+            path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+            prepared[path]=stage(path,json.dumps(value).encode(),0o600)
+            previous[path]=stage(path,path.read_bytes(),path.stat().st_mode & 0o777) if path.exists() else None
+        try:
+            for path in documents:
+                prepared[path].replace(path)
+                applied.append(path)
+        except Exception:
+            failed=[]
+            for path in reversed(applied):
+                try:
+                    if previous[path] is None:
+                        path.unlink(missing_ok=True)
+                    else:
+                        previous[path].replace(path)
+                except OSError:
+                    if previous[path] is not None:
+                        retained.add(previous[path])
+                    failed.append(str(path))
+            if failed:
+                raise RuntimeError(tr('Could not restore controller settings; backups: %1; files: %2',
+                                      ', '.join(map(str,retained)), ', '.join(failed)))
+            raise
+    finally:
+        for path in temporary:
+            if path not in retained:
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError as error:
+                    print('WESP: could not remove enrollment temporary file: '+str(error),file=sys.stderr)
+    return prefs
 
 
 def runtime():
@@ -298,6 +363,17 @@ def normalize_host(value):
     return value.rstrip('/')
 
 
+def prepare_enrollment():
+    """Called by the USB owner with the shared command lock held."""
+    prefs,mem=settings(),runtime()
+    if mem.get('equalizerBase'):
+        release_equalizer(prefs,mem)
+        if mem.get('equalizerBase'):
+            raise ValueError(tr("Turn off the equalizer and wait for the volume indicator to finish first"))
+    if mem['volumeUntil'] > time.time():
+        raise ValueError(tr("Wait for the volume indicator to finish"))
+
+
 def execute(args):
     cmd = args[0]
     prefs = settings()
@@ -321,31 +397,14 @@ def execute(args):
             write_json(RUNTIME/'state.json',mem)
         return dict(ok=True)
     if cmd == 'enroll':
-        if mem.get('equalizerBase'):
-            release_equalizer(prefs,mem)
-            if mem.get('equalizerBase'):
-                raise ValueError(tr("Turn off the equalizer and wait for the volume indicator to finish first"))
-        if mem['volumeUntil'] > time.time():
-            raise ValueError(tr("Wait for the volume indicator to finish"))
         import usb_transport
         expected=json.loads(args[2]) if len(args)>2 else None
         if expected is not None and (not isinstance(expected,dict)
                 or not re.fullmatch(r'[0-9a-f]{12}',expected.get('mac',''))
                 or type(expected.get('count')) is not int or not 1<=expected['count']<=1024):
             raise ValueError(tr("Invalid expected controller configuration"))
-        selected=usb_transport.client(enroll=args[1],expected=expected)
-        import layout
-        sections=layout.legacy(selected['count'])
-        if prefs.get('controller') == selected and prefs.get('sections'):
-            sections=layout.validate(prefs['sections'],selected['count'])
-        else:
-            sections=[dict(id='main',name=tr("Lighting"),start=0,count=selected['count'],reverse=False,placement='custom')]
-        prefs.update(controller=selected,sections=sections,equalizer=False,transport='usb')
-        CONFIG.mkdir(parents=True,exist_ok=True,mode=0o700)
-        write_json(CONFIG/'settings.json',prefs)
-        # Saved effects cannot cross controller identity boundaries.
-        write_json(RUNTIME/'state.json',dict(ids=[],volumeUntil=0,base={},suspended=False,resume=None,controller_mac=selected['mac']))
-        return dict(ok=True,settings=prefs)
+        usb_transport.client(enroll=args[1],expected=expected)
+        return dict(ok=True,settings=settings())
     if cmd == 'layout':
         import layout
         if not prefs.get('controller'):
@@ -513,6 +572,15 @@ def execute(args):
     return dict(ok=True, notifications=len(mem['ids']))
 
 
+def dispatch(args):
+    # Enrollment is serialized by the USB owner, which also serves clients
+    # that use the socket protocol directly. Do not hold this lock across it.
+    if args[:1]==['enroll']:
+        return execute(args)
+    with locked():
+        return execute(args)
+
+
 def main():
     try:
         if sys.argv[1:2] == ['blink']:
@@ -528,8 +596,7 @@ def main():
                     time.sleep(0.2)
             result = dict(ok=True)
         else:
-            with locked():
-                result = execute(sys.argv[1:])
+            result = dispatch(sys.argv[1:])
     except Exception as e:
         print(f'WLED: {type(e).__name__}: {e}', file=sys.stderr)
         try:

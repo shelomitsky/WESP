@@ -2,6 +2,13 @@
 
 ## 0.2.0-alpha.5 — local candidate
 
+- Installer aborts on failed service stops, cancels activating units, activates
+  staged installations and recovers from partial uninstall/explicit rollback.
+- Controller enrollment tolerates an unavailable prior board, commits both
+  saved documents before handoff and serializes direct protocol selection
+  against in-flight snapshot restoration. Identity/count guards remain enforced.
+- Independent installer/controller re-review and regression coverage added.
+
 - Public name WESP, independent of the desktop environment. The first alpha
   still targets KDE Plasma 6. Existing applet/CLI/service/config identities are
   preserved for upgrades; source archives now use the wesp name and folder.

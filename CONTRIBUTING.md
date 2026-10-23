@@ -25,3 +25,10 @@ Never submit device credentials, private paths or real device identity fixtures.
 Use synthetic locally administered MAC addresses for tests. Exclude installation
 backups and reports. Large behavior changes require independent review, especially
 controller switching, power/sleep and installer rollback.
+
+Use `control.dispatch()` for CLI/service commands. Enrollment takes the shared
+command lock in the USB owner; do not hold a client-side command lock while
+calling enrollment. Other commands keep their existing lock. The owner takes
+command lock before device lock and revalidates ordinary requests under device
+lock. Ordinary RPC must remain available while enrollment waits/restores an
+old snapshot; shutdown joins request threads before closing their Device.

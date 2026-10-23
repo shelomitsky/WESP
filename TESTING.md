@@ -1,4 +1,33 @@
-# Candidate verification — 2026-10-22
+# Verification record
+
+## Independent review fixes — 2026-10-23
+
+Two independent AI review contexts reviewed installer and controller handoff
+against baseline `5b5110ce89107422b9c4a93fea3523055dd2b095`, then independently
+re-reviewed the fixes. Both approved their scoped changes with no remaining
+reproduced P1/P2 findings. This is code review, not desktop/hardware acceptance.
+
+The local complete release gate passed **112 tests** and **166 translated
+messages**, real shell quoting, reproducible archives and cold installation
+lifecycle. Targeted verification includes:
+
+- 11 installer tests: failed stops (including activating services), staged
+  activation, preserving intentional disabled states, partial uninstall,
+  partial explicit rollback with changed v1/v2 payloads and successful retry.
+- 13 configuration tests: persistence failure restores both documents or their
+  prior absence, cleans temporary files and allows retry.
+- 19 transport tests and 7 actual multi-process IPC tests: disconnected/different
+  prior boards, changed counts, real read-only config failure, old snapshot vs
+  direct enrollment serialization, identity rejection and graceful shutdown.
+- The controller reviewer separately exercised owner-side EQ restoration and
+  dispatch enrollment; ordinary RPC completed without deadlock.
+
+All tests used temporary HOME/XDG/runtime and fake UART. No real systemd, user
+session, physical controller or installed application was changed by this work.
+External CI status for each source revision is available in the repository's
+[Actions](https://github.com/shelomitsky/WESP/actions).
+
+## Baseline verification — 2026-10-22
 
 Executed locally, before publication:
 

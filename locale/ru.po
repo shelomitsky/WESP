@@ -497,3 +497,6 @@ msgstr "быстрый отклик"
 
 msgid "smooth response"
 msgstr "плавный отклик"
+
+msgid "Could not restore controller settings; backups: %1; files: %2"
+msgstr "Не удалось восстановить настройки контроллера; резервные копии: %1; файлы: %2"

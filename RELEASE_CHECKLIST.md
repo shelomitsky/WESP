@@ -66,7 +66,10 @@ is verified; fresh install, rollback and logout/login acceptance remain open.
 - [ ] User systemd install/upgrade/rollback with real active/enabled states and logout behavior.
 - [ ] Desktop dependency installation on a named supported Plasma 6 distribution.
   Ubuntu 24.04 source CI is verified; it does not install/accept a KDE session.
-- [ ] Independent review of the device switch and installer transaction boundaries.
+- [x] Independent AI review of the device switch and installer transaction boundaries:
+  two separate reviewers re-reviewed the fixes on 2026-10-23; no remaining
+  reproduced P1/P2 findings in their scope. Local release gate: 112 tests.
+  Real systemd/KDE/hardware lifecycle acceptance remains in the open items above.
 
 The owner has updated the candidate on their existing setup. The original USB
 acceptance remains historical transport evidence. Do not infer new acceptance

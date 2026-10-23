@@ -60,7 +60,9 @@ system GI/DBus libraries. No distribution package command is claimed tested yet.
 
 The installer checks dependencies before changing files. `--no-start` stages
 files without starting services, dependency preflight or hardware access.
-It is intended for packaging/tests, not desktop acceptance.
+A subsequent normal install activates a staged installation. Upgrades of an
+already activated installation preserve intentionally inactive/disabled services.
+Staging is intended for packaging/tests, not desktop acceptance.
 Use the system interpreter above: installed launchers use `/usr/bin/python3`.
 A virtual environment with the Python packages alone is not a desktop install.
 
@@ -93,6 +95,11 @@ no personal device profile is shipped in this repository.
 directions; it contains no controller identity. Adjust directions and placement
 for the actual wiring, then use the widget or `layout` command after enrollment.
 
+Enrollment is committed by the USB owner under the shared command lock.
+An unavailable previous board does not by itself block an explicit selection;
+the equalizer/volume restoration guards above still apply. If saving the new
+selection fails, the previous selection and its saved documents are restored.
+
 ## Uninstall and rollback
 
 Run from the retained source checkout:
@@ -102,6 +109,9 @@ python3 manage.py uninstall
 python3 manage.py rollback /path/printed/by/installer
 ```
 
+Caught file failures during removal or explicit rollback restore the previous
+files, ownership manifest and service state from a transaction backup. Failed
+service shutdown aborts before modifying application files.
 Settings are retained. Owned files edited after installation block automatic
 replacement/removal. Unrelated files are not removed. Keep this source checkout
 until testing/rollback is finished. Service shutdown exits realtime; the

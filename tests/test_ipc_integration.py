@@ -17,6 +17,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 MAC = '021122334455'
 PORT = '/dev/ttyUSB8'
+SECOND_PORT = '/dev/ttyUSB9'
+SECOND_MAC = '021122334466'
 
 
 class UART:
@@ -30,7 +32,7 @@ class UART:
         self.state = dict(on=True, bri=128, lor=0, live=False)
 
     def open(self):
-        if self.port != PORT:
+        if self.port not in (PORT, SECOND_PORT):
             raise ValueError('Test peer refuses any other serial endpoint')
         self.is_open = True
 
@@ -45,12 +47,19 @@ class UART:
         self.buffer = b''
 
     def write(self, packet):
+        peer_file = Path(os.environ['WLED_TEST_UART_PEER'])
+        peer = json.loads(peer_file.read_text()) if peer_file.exists() else {}
+        if self.port in peer.get('offline', []):
+            raise OSError('Test controller disconnected')
         with Path(os.environ['WLED_TEST_UART_TRACE']).open('a') as stream:
             stream.write(json.dumps(packet.hex()) + '\n')
         if packet.startswith(b'{'):
             self.state.update({k: v for k, v in json.loads(packet).items() if k != 'v'})
-            self.buffer = json.dumps(dict(state=self.state,
-                info=dict(mac=MAC, leds=dict(count=2)))).encode() + b'\n'
+            info = peer.get('ports', {}).get(self.port, {})
+            mac = info.get('mac', SECOND_MAC if self.port == SECOND_PORT else MAC)
+            document = dict(state=self.state,
+                info=dict(mac=mac, leds=dict(count=info.get('count', 2))))
+            self.buffer = json.dumps(document).encode() + b'\n'
         return len(packet)
 
     def read(self, count):
@@ -85,6 +94,7 @@ class IPCIntegrationTest(unittest.TestCase):
             WLED_CONFIG_DIR=str(self.base / 'config/app'),
             WLED_RUNTIME_DIR=str(self.base / 'runtime/app'),
             WLED_TEST_UART_TRACE=str(self.base / 'uart.jsonl'),
+            WLED_TEST_UART_PEER=str(self.base / 'peer.json'),
             # Keep the invoking interpreter's installed dependencies available
             # even when they are in its user site; HOME still stays isolated.
             PYTHONPATH=os.pathsep.join(str(Path(p).resolve()) for p in sys.path if p),
@@ -127,7 +137,7 @@ class IPCIntegrationTest(unittest.TestCase):
         # Independent config import and process for every ordinary client call.
         code = ('import json,usb_transport as usb,control\n'
                 'try:\n result=' + expression + '\n'
-                'except ValueError as error:\n print(json.dumps(dict(ok=False,error=str(error))))\n'
+                'except Exception as error:\n print(json.dumps(dict(ok=False,error=str(error))))\n'
                 'else:\n print(json.dumps(dict(ok=True,result=result)))\n')
         result = subprocess.run([sys.executable, '-c', code], env=self.env, cwd=ROOT,
             capture_output=True, text=True, timeout=15)
@@ -238,6 +248,99 @@ class IPCIntegrationTest(unittest.TestCase):
             self.stop_service(first)
             self.stop_service(second)
         self.assertFalse(self.socket.exists())
+
+    def test_explicit_enrollment_recovers_when_previous_board_is_unavailable_or_changed(self):
+        cases = (
+            (dict(offline=[PORT]), SECOND_PORT, SECOND_MAC, 2),
+            (dict(ports={PORT:dict(mac=SECOND_MAC)}), PORT, SECOND_MAC, 2),
+            (dict(ports={PORT:dict(count=3)}), PORT, MAC, 3),
+        )
+        for peer, port, mac, count in cases:
+            with self.subTest(peer=peer):
+                self.configure()
+                peer_file = self.base/'peer.json'
+                peer_file.write_text('{}')
+                process = self.start_service()
+                try:
+                    self.wait_ready(process)
+                    peer_file.write_text(json.dumps(peer))
+                    result = self.client("control.dispatch(['enroll'," + repr(port) + "])")
+                    self.assertTrue(result['ok'], result)
+                    self.assertEqual(result['result']['settings']['controller'],
+                                     dict(port=port, mac=mac, count=count))
+                    self.assertEqual(self.client('usb.client(link=True)')['result']['mac'], mac)
+                finally:
+                    self.stop_service(process)
+
+    def test_failed_enrollment_persistence_keeps_service_and_saved_selection_consistent(self):
+        process = self.start_service()
+        self.wait_ready(process)
+        runtime = self.base/'runtime/app/state.json'
+        runtime.write_text(json.dumps(dict(controller_mac=MAC, ids=[], volumeUntil=0,
+            base={'4':dict(fx=9)}, suspended=False, resume=None)))
+        before = {p:p.read_bytes() for p in (self.settings_file, runtime)}
+        # This is a real filesystem failure in both the CLI and server process,
+        # not a mocked enrollment callback. Per-user acceptance runs unprivileged.
+        self.settings_file.parent.chmod(0o500)
+        try:
+            result = self.client("control.dispatch(['enroll','/dev/ttyUSB9'])")
+            self.assertFalse(result['ok'], result)
+        finally:
+            self.settings_file.parent.chmod(0o700)
+        for path, content in before.items():
+            self.assertEqual(path.read_bytes(), content)
+        healthy = self.client('usb.client(payload={})')
+        self.assertTrue(healthy['ok'], healthy)
+        self.assertEqual(self.client('usb.client(link=True)')['result']['mac'], MAC)
+
+    def test_enrollment_cannot_interleave_with_an_old_snapshot_restore(self):
+        process = self.start_service()
+        self.wait_ready(process)
+        ready, release = self.base/'restore-ready', self.base/'restore-release'
+        holder_code = '''import control,time
+from pathlib import Path
+with control.locked():
+    prefs=control.settings()
+    Path(%r).touch()
+    deadline=time.monotonic()+12
+    while not Path(%r).exists():
+        if time.monotonic()>deadline: raise RuntimeError('restore release timeout')
+        time.sleep(.01)
+    control.request(prefs,{'seg':[{'id':0,'fx':77,'col':[[100,20,30]]}]})
+''' % (str(ready), str(release))
+        holder = subprocess.Popen([sys.executable,'-c',holder_code],env=self.env,cwd=ROOT,
+                                  stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        enrollment = None
+        try:
+            deadline = time.monotonic()+4
+            while not ready.exists() and time.monotonic()<deadline:
+                time.sleep(.01)
+            self.assertTrue(ready.exists())
+            enrollment = subprocess.Popen([sys.executable,'-c',
+                "import json,usb_transport; print(json.dumps(usb_transport.client(enroll='/dev/ttyUSB9')))"],
+                env=self.env,cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            # The direct protocol operation must wait for the in-flight
+            # command, even though candidate identity can be verified quickly.
+            with self.assertRaises(subprocess.TimeoutExpired):
+                enrollment.communicate(timeout=2.5)
+            release.touch()
+            stdout, stderr = holder.communicate(timeout=8)
+            self.assertEqual(holder.returncode,0,stderr)
+            stdout, stderr = enrollment.communicate(timeout=8)
+            self.assertEqual(enrollment.returncode,0,stderr)
+            self.assertEqual(json.loads(stdout)['mac'],SECOND_MAC)
+            state = self.client('usb.client(payload={})')
+            self.assertTrue(state['ok'],state)
+            self.assertNotIn('seg',state['result'],'old snapshot reached the new board')
+        finally:
+            release.touch()
+            for child in (holder,enrollment):
+                if child is not None and child.poll() is None:
+                    try:
+                        child.communicate(timeout=8)
+                    except subprocess.TimeoutExpired:
+                        child.kill()
+                        child.communicate(timeout=3)
 
 
 if __name__ == '__main__':

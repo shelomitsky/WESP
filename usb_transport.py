@@ -300,53 +300,69 @@ def serve():
     device_lock = threading.RLock()
     stop = threading.Event()
 
+    def enroll_device(command):
+        nonlocal device
+        import re
+        port=command['port']
+        if not re.fullmatch(r'/dev/tty(?:USB|ACM)[0-9]+',port):
+            raise ValueError(tr("Select a USB serial port from the list"))
+        # This may restore an old EQ snapshot through an ordinary RPC. The
+        # threaded server can handle it; device_lock must not be held yet.
+        control.prepare_enrollment()
+        with device_lock:
+            old=device
+            if old is not None:
+                try:
+                    old.query({'live':False})
+                except Exception:
+                    LOG.warning('Previous controller unavailable during explicit enrollment',exc_info=True)
+                finally:
+                    old.close()
+            pinned=command.get('expected')
+            candidate=Device(port,expected_mac=pinned['mac'] if pinned else None,
+                             led_count=pinned['count'] if pinned else None,discover=not bool(pinned))
+            try:
+                candidate.query()
+                selected=dict(port=port,mac=candidate.expected_mac,count=candidate.led_count)
+                control.persist_enrollment(selected)
+            except Exception:
+                candidate.close()
+                raise
+            device=candidate
+            return selected
+
     class Handler(socketserver.StreamRequestHandler):
         def handle(self):
             self.connection.settimeout(4)
             try:
-                command = json.loads(self.rfile.readline(65536))
-                nonlocal device
-                if command.get('kind') != 'enroll' and device is not None:
-                    require_target(command,device)
-                if command['kind'] == 'enroll':
-                    import re
-                    port = command['port']
-                    if not re.fullmatch(r'/dev/tty(?:USB|ACM)[0-9]+', port):
-                        raise ValueError(tr("Select a USB serial port from the list"))
-                    with device_lock:
-                        old = device
-                        if old is not None:
-                            old.query({'live': False})
-                            old.close()
-                        pinned=command.get('expected')
-                        candidate = Device(port, expected_mac=pinned['mac'] if pinned else None,
-                                           led_count=pinned['count'] if pinned else None,discover=not bool(pinned))
-                        try:
-                            candidate.query()
-                        except Exception:
-                            candidate.close()
-                            raise
-                        device = candidate
-                        result = dict(port=port, mac=device.expected_mac, count=device.led_count)
-                elif device is None:
-                    raise ValueError(tr("Select a controller first"))
-                elif command['kind'] == 'state':
-                    result = device.state(command.get('payload'))
-                elif command['kind'] == 'pixels':
-                    result = device.pixels(command['pixels'])
-                elif command['kind'] == 'link':
-                    result = device.link_status()
-                elif command['kind'] == 'baud':
-                    result = device.set_baud(command['baud'])
+                command=json.loads(self.rfile.readline(65536))
+                if command['kind']=='enroll':
+                    # Lock before device_lock so a command already holding the
+                    # shared lock can finish its UART RPC while enrollment waits.
+                    with control.locked():
+                        result=enroll_device(command)
                 else:
-                    raise ValueError(tr("Unknown USB command"))
-                response = dict(ok=True, result=result)
+                    with device_lock:
+                        if device is None:
+                            raise ValueError(tr("Select a controller first"))
+                        require_target(command,device)
+                        if command['kind']=='state':
+                            result=device.state(command.get('payload'))
+                        elif command['kind']=='pixels':
+                            result=device.pixels(command['pixels'])
+                        elif command['kind']=='link':
+                            result=device.link_status()
+                        elif command['kind']=='baud':
+                            result=device.set_baud(command['baud'])
+                        else:
+                            raise ValueError(tr("Unknown USB command"))
+                response=dict(ok=True,result=result)
             except Exception as error:
-                LOG.warning('USB command failed: %s', error)
-                response = dict(ok=False, error=str(error))
+                LOG.warning('USB command failed: %s',error)
+                response=dict(ok=False,error=str(error))
             try:
-                self.wfile.write(json.dumps(response).encode() + b'\n')
-            except (BrokenPipeError, ConnectionResetError):
+                self.wfile.write(json.dumps(response).encode()+b'\n')
+            except (BrokenPipeError,ConnectionResetError):
                 pass
 
     def refresh():
@@ -370,7 +386,7 @@ def serve():
     # service must not unlink the first service's socket or claim its UART.
     with control.locked('usb-owner'):
         path.unlink(missing_ok=True)
-        server = socketserver.UnixStreamServer(str(path), Handler)
+        server = socketserver.ThreadingUnixStreamServer(str(path), Handler)
         path.chmod(0o600)
         server.timeout = .2
         poller = threading.Thread(target=refresh, daemon=True)
@@ -380,6 +396,8 @@ def serve():
                 server.handle_request()
         finally:
             stop.set()
+            # Join request threads before closing/reconfiguring their Device.
+            server.server_close()
             poller.join(timeout=5)
             try:
                 if device is not None and device.serial is not None:
@@ -389,7 +407,6 @@ def serve():
                 LOG.exception('Could not exit realtime mode')
             if device is not None:
                 device.close()
-            server.server_close()
             path.unlink(missing_ok=True)
 
 
