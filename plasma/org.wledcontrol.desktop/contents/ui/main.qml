@@ -759,7 +759,9 @@ PlasmoidItem {
                         case "tools": return i18nd("plasma_applet_org.wledcontrol.desktop", "Preparing the installer…");
                         case "download": return i18nd("plasma_applet_org.wledcontrol.desktop", "Downloading verified WLED firmware…");
                         case "detecting": return i18nd("plasma_applet_org.wledcontrol.desktop", "Checking the selected ESP…");
-                        case "backup": return i18nd("plasma_applet_org.wledcontrol.desktop", "Saving the original firmware: %1%. This may take several minutes.", root.firmwareJob.percent || 0);
+                        case "backup": return root.firmwareJob.backup_baud === 115200
+                            ? i18nd("plasma_applet_org.wledcontrol.desktop", "Saving at a compatible USB speed: %1%. This may take about ten minutes.",root.firmwareJob.percent || 0)
+                            : i18nd("plasma_applet_org.wledcontrol.desktop", "Saving the original firmware: %1%. This may take several minutes.", root.firmwareJob.percent || 0);
                         case "writing": return root.firmwareJob.flavor === "wesp"
                             ? i18nd("plasma_applet_org.wledcontrol.desktop", "Installing WESP. Keep the USB cable connected…")
                             : i18nd("plasma_applet_org.wledcontrol.desktop", "Installing WLED. Keep the USB cable connected…");

@@ -11,6 +11,31 @@ import firmware
 
 
 class FirmwareTest(unittest.TestCase):
+    def test_backup_read_error_restarts_once_at_base_speed_and_checks_chip_digest(self):
+        image=b'x'*firmware.FLASH_SIZE
+        esp=Mock()
+        esp.read_flash.side_effect=[OSError('read block failed'),image]
+        esp.flash_md5sum.return_value=hashlib.md5(image).hexdigest()
+        result=firmware.read_verified_backup(esp,Mock(),(OSError,))
+        self.assertEqual(result,image)
+        esp.change_baud.assert_called_once_with(115200)
+        self.assertEqual(esp.read_flash.call_count,2)
+        esp.flash_md5sum.assert_called_once_with(0,firmware.FLASH_SIZE)
+
+    def test_corrupt_backup_and_second_read_failure_do_not_succeed(self):
+        esp=Mock();esp.read_flash.return_value=b'x'*firmware.FLASH_SIZE
+        esp.flash_md5sum.return_value='0'*32
+        with self.assertRaises(ValueError):firmware.read_verified_backup(esp,Mock(),(OSError,))
+        self.assertEqual(esp.read_flash.call_count,2)
+        esp=Mock();esp.read_flash.side_effect=OSError('still failing')
+        with self.assertRaises(OSError):firmware.read_verified_backup(esp,Mock(),(OSError,))
+        self.assertEqual(esp.read_flash.call_count,2)
+
+    def test_backup_cancellation_is_never_retried(self):
+        esp=Mock();esp.read_flash.side_effect=RuntimeError('interrupted')
+        with self.assertRaises(RuntimeError):firmware.read_verified_backup(esp,Mock(),(OSError,))
+        esp.change_baud.assert_not_called()
+
     def test_wrong_board_size_security_or_identity_never_reaches_write(self):
         good = dict(chip='ESP32', mac='680947485628', size=4194304, secure=False)
         firmware.validate_board(good)

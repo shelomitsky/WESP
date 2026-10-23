@@ -261,6 +261,35 @@ def require_free_port(port):
         raise ValueError(tr('Could not check who is using the USB port'))
 
 
+class BackupVerificationError(ValueError):
+    pass
+
+
+def read_verified_backup(esp, progress, retry_errors):
+    """One read-only fallback; never retry writes or swallow cancellation."""
+    retryable=tuple(retry_errors)+(BackupVerificationError,)
+    for attempt in range(2):
+        try:
+            image=esp.read_flash(0,FLASH_SIZE,progress)
+            if len(image)!=FLASH_SIZE:
+                raise BackupVerificationError(tr('The backup is incomplete. Nothing has been written'))
+            remote=esp.flash_md5sum(0,FLASH_SIZE)
+            if isinstance(remote,bytes):
+                remote=remote.decode('ascii')
+            if remote!=hashlib.md5(image).hexdigest():
+                raise BackupVerificationError(tr('The backup does not match the controller. Nothing has been written'))
+            return image
+        except retryable:
+            if attempt:
+                raise
+            # Reuse the same exclusive connection and pinned board. Clear any
+            # trailing reply before the baud-change command, then start at 0.
+            esp._port.reset_input_buffer()
+            esp.change_baud(115200)
+            print('Restarting read-only backup at 115200 baud',flush=True)
+            progress(0,FLASH_SIZE)
+
+
 def operate(root, data, action):
     import esptool
     if validate_port(data['port']) != data['identity']:
@@ -282,9 +311,9 @@ def operate(root, data, action):
             updated=[0.0]
             def progress(done, length):
                 if time.monotonic()-updated[0] > 1 or done == length:
-                    stage(root, data, 'backup', percent=int(done*100/length))
+                    stage(root, data, 'backup', percent=int(done*100/length),backup_baud=esp._port.baudrate)
                     updated[0]=time.monotonic()
-            image=esp.read_flash(0, FLASH_SIZE, progress)
+            image=read_verified_backup(esp,progress,(esptool.FatalError,OSError,TimeoutError))
             if len(image) != FLASH_SIZE:
                 raise ValueError(tr('The backup is incomplete. Nothing has been written'))
             import manage

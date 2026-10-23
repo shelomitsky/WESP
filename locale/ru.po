@@ -638,3 +638,9 @@ msgstr "Установка WESP. Не отключайте USB-кабель…"
 
 msgid "WESP installed. Read the receiver above, then save its outputs and network."
 msgstr "WESP установлен. Прочитайте настройки контроллера выше, затем сохраните его выходы и сеть."
+
+msgid "The backup does not match the controller. Nothing has been written"
+msgstr "Копия не совпадает с памятью контроллера. Запись не выполнялась"
+
+msgid "Saving at a compatible USB speed: %1%. This may take about ten minutes."
+msgstr "Сохранение на совместимой скорости USB: %1%. Это может занять около десяти минут."
