@@ -141,3 +141,11 @@ Live managed updates were separately applied with backups on the owner's setup;
 after the light/dark icon update, all 34 installed hashes matched and Plasma,
 USB and equalizer services were active. This does not accept fresh-user login
 or real installer rollback scenarios.
+
+## First-run wizard candidate (2026-10-24)
+
+`tests/test_firmware.py` covers unsupported/protected/swapped boards, exact backup
+size/digest, pinned downloads, one ROM connection for identity and write, foreign
+port owners, failed service recovery and automatic connection with a pinned MAC
+while excluding a concurrent preparation job. Source/backend checks do not accept
+physical lighting or the visible wizard. Real board/UI acceptance is pending.

@@ -97,6 +97,8 @@ class Device:
             self.expected_mac, self.led_count = mac, count
         if not self.expected_mac or mac != self.expected_mac:
             raise ValueError(tr("USB: a different controller is connected"))
+        if self.discover and self.led_count is None:
+            self.led_count = count
         if count != self.led_count:
             raise ValueError(tr("WLED LED count changed; check the layout and reconnect"))
 
@@ -320,7 +322,8 @@ def serve():
                     old.close()
             pinned=command.get('expected')
             candidate=Device(port,expected_mac=pinned['mac'] if pinned else None,
-                             led_count=pinned['count'] if pinned else None,discover=not bool(pinned))
+                             led_count=pinned.get('count') if pinned else None,
+                             discover=not pinned or 'count' not in pinned)
             try:
                 candidate.query()
                 selected=dict(port=port,mac=candidate.expected_mac,count=candidate.led_count)

@@ -500,3 +500,81 @@ msgstr "плавный отклик"
 
 msgid "Could not restore controller settings; backups: %1; files: %2"
 msgstr "Не удалось восстановить настройки контроллера; резервные копии: %1; файлы: %2"
+
+msgid "A controller installation is already running"
+msgstr "Установка контроллера уже выполняется"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "Checking the selected ESP…"
+msgstr "Проверка выбранной ESP…"
+
+msgid "Could not check who is using the USB port"
+msgstr "Не удалось проверить, кто использует USB-порт"
+
+msgid "Could not restart WESP services"
+msgstr "Не удалось запустить службы WESP"
+
+msgid "Downloading verified WLED firmware…"
+msgstr "Загрузка проверенной прошивки WLED…"
+
+msgid "ESP32 · %1 · %2\nWLED %3\nOriginal firmware saved to: %4"
+msgstr "ESP32 · %1 · %2\nWLED %3\nИсходная прошивка сохранена: %4"
+
+msgid "File verification failed. Nothing has been written"
+msgstr "Проверка файла не пройдена. Запись не выполнялась"
+
+msgid "Install WLED"
+msgstr "Установить WLED"
+
+msgid "Install WLED on a new ESP"
+msgstr "Установить WLED на новую ESP"
+
+msgid "Installation can only be cancelled before writing starts"
+msgstr "Установку можно отменить только до начала записи"
+
+msgid "Installation failed: %1\nBackup: %2"
+msgstr "Установка не завершена: %1\nРезервная копия: %2"
+
+msgid "Installation was interrupted. The backup has been retained"
+msgstr "Установка прервана. Резервная копия сохранена"
+
+msgid "Installing WLED. Keep the USB cable connected…"
+msgstr "Установка WLED. Не отключайте USB-кабель…"
+
+msgid "Only an unencrypted classic ESP32 with 4 MB flash is supported"
+msgstr "Поддерживается только обычная ESP32 с 4 МБ памяти без шифрования"
+
+msgid "Prepare the board before confirming installation"
+msgstr "Подготовьте плату перед подтверждением установки"
+
+msgid "Preparing the installer…"
+msgstr "Подготовка установщика…"
+
+msgid "Replace the firmware and erase all settings on this ESP"
+msgstr "Заменить прошивку и удалить все настройки на этой ESP"
+
+msgid "Saving the original firmware: %1%. This may take several minutes."
+msgstr "Сохранение исходной прошивки: %1%. Это может занять несколько минут."
+
+msgid "Starting the installer…"
+msgstr "Запуск установщика…"
+
+msgid "The USB controller changed. Prepare the selected board again"
+msgstr "USB-контроллер изменился. Повторите подготовку выбранной платы"
+
+msgid "The USB port is used by another application. Close it and try again"
+msgstr "USB-порт занят другим приложением. Закройте его и повторите попытку"
+
+msgid "The backup is incomplete. Nothing has been written"
+msgstr "Резервная копия неполная. Запись не выполнялась"
+
+msgid "The firmware image does not fit this board"
+msgstr "Образ прошивки не подходит по размеру для этой платы"
+
+msgid "The selected USB device is no longer connected"
+msgstr "Выбранное USB-устройство отключено"
+
+msgid "WLED installed. Connect the controller, then set up the LED outputs in WLED before attaching a strip."
+msgstr "WLED установлен. Подключите контроллер и настройте выходы в WLED перед подключением ленты."

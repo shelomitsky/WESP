@@ -63,7 +63,7 @@ def payloads():
     app=p['data']/'wled-control'
     result={}
     for name in ('control.py','equalizer.py','usb_transport.py','usb_probe.py','events.py',
-                 'layout.py','notification_fx.py','wallpaper.py','i18n.py','services.py','manage.py','LICENSE','README.md'):
+                 'layout.py','notification_fx.py','wallpaper.py','i18n.py','services.py','firmware.py','manage.py','LICENSE','README.md'):
         result[app/name]=((SOURCE/name).read_bytes(),0o644)
     for catalog in (SOURCE/'locale').glob('*/LC_MESSAGES/plasma_applet_org.wledcontrol.desktop.mo'):
         relative=catalog.relative_to(SOURCE/'locale')

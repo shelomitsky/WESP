@@ -41,6 +41,9 @@ PlasmoidItem {
     property var ports: []
     property string selectedPort: ""
     property int ledCount: 0
+    property var firmwareJob: ({stage: "idle"})
+    readonly property bool firmwareBusy: ["starting", "tools", "download", "detecting", "backup", "writing", "connecting"].indexOf(firmwareJob.stage) >= 0
+    property bool firmwareConfirmed: false
     property var sections: []
     property var draftSections: []
     property bool layoutDirty: false
@@ -94,6 +97,14 @@ PlasmoidItem {
         runner.connectSource(source);
     }
     function acceptResult(data) {
+        if (data.firmware) {
+            var previous = firmwareJob.stage;
+            firmwareJob = data.firmware;
+            if (previous !== firmwareJob.stage) firmwareConfirmed = false;
+            if (firmwareJob.stage === "flashed" && previous !== "flashed") {
+                root.request(["firmware-connect", firmwareJob.token]);
+            }
+        }
         if (data.wallpaper) {
             wallpaperStatus = data.wallpaper.status;
             wallpaperColors = data.wallpaper.colors.map(function(rgb) { return Qt.rgba(rgb[0]/255, rgb[1]/255, rgb[2]/255, 1); });
@@ -109,7 +120,7 @@ PlasmoidItem {
             notifyStrength = data.settings.notify_strength === undefined ? 60 : data.settings.notify_strength;
             var controller = data.settings.controller;
             ledCount = controller ? controller.count : 0;
-            if (controller) selectedPort = controller.port;
+            if (controller && (!selectedPort || activeCommand[0] === "enroll")) selectedPort = controller.port;
             sections = data.settings.sections || [];
             if (!layoutDirty) draftSections = JSON.parse(JSON.stringify(sections));
             host = data.settings.host;
@@ -136,12 +147,12 @@ PlasmoidItem {
         connectedSources: []
         onNewData: function(sourceName, data) {
             disconnectSource(sourceName);
-            var refresh = root.activeCommand[0] !== "status";
+            var refresh = root.activeCommand[0] !== "status" && root.activeCommand[0].indexOf("firmware-") !== 0;
             try {
                 var result = JSON.parse(data["stdout"]);
                 root.acceptResult(result);
                 if (result.ok && data["exit code"] === 0) {
-                    if (root.activeCommand[0] === "layout" || root.activeCommand[0] === "enroll") {
+                    if (root.activeCommand[0] === "layout" || root.activeCommand[0] === "enroll" || root.activeCommand[0] === "firmware-connect") {
                         root.layoutDirty = false;
                         root.draftSections = JSON.parse(JSON.stringify(root.sections));
                     }
@@ -164,12 +175,18 @@ PlasmoidItem {
             else if (refresh) root.request(["status"]);
         }
     }
-    Component.onCompleted: request(["status"])
+    Component.onCompleted: { request(["status"]); request(["ports"]); request(["firmware-status"]); }
+    Timer {
+        interval: 1500
+        repeat: true
+        running: root.firmwareBusy
+        onTriggered: root.request(["firmware-status"])
+    }
     Timer {
         interval: root.expanded ? 5000 : 30000
         repeat: true
         running: true
-        onTriggered: root.request(["status"])
+        onTriggered: { if (!root.firmwareBusy) root.request(["status"]); }
     }
     Timer {
         id: brightnessDelay
@@ -579,6 +596,7 @@ PlasmoidItem {
             contentItem: ColumnLayout {
                 RowLayout {
                     QQC2.ComboBox {
+                        enabled: !root.firmwareBusy && root.firmwareJob.stage !== "prepared"
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
                         model: root.ports
@@ -586,13 +604,71 @@ PlasmoidItem {
                         displayText: currentIndex >= 0 ? currentText : root.selectedPort || i18nd("plasma_applet_org.wledcontrol.desktop", "Select a USB port")
                         onActivated: root.selectedPort = root.ports[currentIndex].port
                     }
-                    QQC2.Button { text: i18nd("plasma_applet_org.wledcontrol.desktop", "Find"); enabled: !root.busy; onClicked: root.request(["ports"]) }
+                    QQC2.Button { text: i18nd("plasma_applet_org.wledcontrol.desktop", "Find"); enabled: !root.busy && !root.firmwareBusy; onClicked: root.request(["ports"]) }
                 }
                 QQC2.Button {
                     text: i18nd("plasma_applet_org.wledcontrol.desktop", "Connect selected ESP")
                     Layout.fillWidth: true
-                    enabled: root.selectedPort.length > 0 && !root.busy
+                    enabled: root.selectedPort.length > 0 && !root.busy && !root.firmwareBusy
                     onClicked: root.request(["enroll", root.selectedPort])
+                }
+                QQC2.Button {
+                    text: i18nd("plasma_applet_org.wledcontrol.desktop", "Install WLED on a new ESP")
+                    Layout.fillWidth: true
+                    enabled: root.selectedPort.length > 0 && !root.busy && !root.firmwareBusy && root.firmwareJob.stage !== "prepared"
+                    onClicked: root.request(["firmware-prepare", root.selectedPort])
+                }
+                QQC2.Label {
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                    visible: root.firmwareBusy
+                    text: {
+                        switch(root.firmwareJob.stage) {
+                        case "tools": return i18nd("plasma_applet_org.wledcontrol.desktop", "Preparing the installer…");
+                        case "download": return i18nd("plasma_applet_org.wledcontrol.desktop", "Downloading verified WLED firmware…");
+                        case "detecting": return i18nd("plasma_applet_org.wledcontrol.desktop", "Checking the selected ESP…");
+                        case "backup": return i18nd("plasma_applet_org.wledcontrol.desktop", "Saving the original firmware: %1%. This may take several minutes.", root.firmwareJob.percent || 0);
+                        case "writing": return i18nd("plasma_applet_org.wledcontrol.desktop", "Installing WLED. Keep the USB cable connected…");
+                        default: return i18nd("plasma_applet_org.wledcontrol.desktop", "Starting the installer…");
+                        }
+                    }
+                }
+                QQC2.ProgressBar {
+                    Layout.fillWidth: true
+                    visible: root.firmwareBusy
+                    indeterminate: root.firmwareJob.stage !== "backup"
+                    from: 0; to: 100; value: root.firmwareJob.percent || 0
+                }
+                QQC2.Label {
+                    visible: root.firmwareJob.stage === "prepared"
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                    text: i18nd("plasma_applet_org.wledcontrol.desktop", "ESP32 · %1 · %2\nWLED %3\nOriginal firmware saved to: %4", root.firmwareJob.port || "", root.firmwareJob.board ? root.firmwareJob.board.mac : "", root.firmwareJob.version || "", root.firmwareJob.backup || "")
+                }
+                QQC2.CheckBox {
+                    visible: root.firmwareJob.stage === "prepared"
+                    Layout.fillWidth: true
+                    text: i18nd("plasma_applet_org.wledcontrol.desktop", "Replace the firmware and erase all settings on this ESP")
+                    checked: root.firmwareConfirmed
+                    onClicked: root.firmwareConfirmed = checked
+                }
+                RowLayout {
+                    visible: root.firmwareJob.stage === "prepared"
+                    QQC2.Button {
+                        text: i18nd("plasma_applet_org.wledcontrol.desktop", "Install WLED")
+                        enabled: root.firmwareConfirmed && !root.busy
+                        onClicked: root.request(["firmware-install", root.firmwareJob.token])
+                    }
+                    QQC2.Button {
+                        text: i18nd("plasma_applet_org.wledcontrol.desktop", "Cancel")
+                        enabled: !root.busy
+                        onClicked: root.request(["firmware-cancel", root.firmwareJob.token])
+                    }
+                }
+                QQC2.Label {
+                    visible: root.firmwareJob.stage === "failed" || ["flashed", "installed", "connected"].indexOf(root.firmwareJob.stage) >= 0
+                    Layout.fillWidth: true; wrapMode: Text.WordWrap
+                    text: root.firmwareJob.stage === "failed"
+                        ? i18nd("plasma_applet_org.wledcontrol.desktop", "Installation failed: %1\nBackup: %2", root.firmwareJob.error || "", root.firmwareJob.backup || "—")
+                        : i18nd("plasma_applet_org.wledcontrol.desktop", "WLED installed. Connect the controller, then set up the LED outputs in WLED before attaching a strip.")
                 }
                 QQC2.Label { text: i18nd("plasma_applet_org.wledcontrol.desktop", "LEDs: %1", root.ledCount) }
                 QQC2.Label {

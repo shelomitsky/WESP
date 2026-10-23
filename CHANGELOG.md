@@ -1,3 +1,9 @@
+# 0.2.0-alpha.6 (candidate)
+
+- Add a widget wizard for first installation of WLED on an unencrypted classic 4MB ESP32: private tooling, checksum-pinned images, full flash backup, explicit replacement confirmation and guarded normal enrollment.
+- Keep USB identity verification and writing in one exclusive ROM connection; recover WESP service state after failed/interrupted jobs.
+- Real visible first-run acceptance remains pending until exercised on the selected test board.
+
 # Changes
 
 ## 0.2.0-alpha.5 — local candidate

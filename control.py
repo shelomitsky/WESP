@@ -401,7 +401,7 @@ def execute(args):
         expected=json.loads(args[2]) if len(args)>2 else None
         if expected is not None and (not isinstance(expected,dict)
                 or not re.fullmatch(r'[0-9a-f]{12}',expected.get('mac',''))
-                or type(expected.get('count')) is not int or not 1<=expected['count']<=1024):
+                or ('count' in expected and (type(expected['count']) is not int or not 1<=expected['count']<=1024))):
             raise ValueError(tr("Invalid expected controller configuration"))
         usb_transport.client(enroll=args[1],expected=expected)
         return dict(ok=True,settings=settings())
@@ -573,6 +573,40 @@ def execute(args):
 
 
 def dispatch(args):
+    if args[:1] == ['firmware-connect']:
+        import firmware
+        root=firmware.state_root()
+        with firmware.job_lock(root):
+            data=firmware.read_job(root)
+            if len(args) != 2 or data['stage'] != 'flashed' or args[1] != data.get('token'):
+                raise ValueError(tr("Prepare the board before confirming installation"))
+            firmware.stage(root, data, 'connecting', pid=os.getpid(), stamp=firmware.process_stamp(os.getpid()))
+        try:
+            # Discover LED count only after the firmware's exact MAC matches.
+            result=execute(['enroll', data['port'], json.dumps(dict(mac=data['board']['mac']))])
+        except Exception:
+            with firmware.job_lock(root):
+                if firmware.read_job(root).get('token') == data['token']:
+                    firmware.stage(root, data, 'installed')
+            raise
+        with firmware.job_lock(root):
+            current=firmware.read_job(root)
+            if current.get('token') != data['token'] or current['stage'] != 'connecting':
+                raise ValueError(tr("The USB controller changed. Prepare the selected board again"))
+            firmware.stage(root, data, 'connected')
+        result['firmware']=data
+        return result
+    if args[:1] == ['firmware-status']:
+        import firmware
+        return dict(ok=True, firmware=firmware.status())
+    if args[:1] in (['firmware-prepare'], ['firmware-install'], ['firmware-cancel']):
+        import firmware
+        if len(args) != 2:
+            raise ValueError(tr("Prepare the board before confirming installation"))
+        return dict(ok=True, firmware=firmware.start(args[0].removeprefix('firmware-'), args[1]))
+    import firmware
+    if firmware.read_job()['stage'] in firmware.BUSY and args[:1] not in (['config'], ['ports'], ['status']):
+        raise ValueError(tr("A controller installation is already running"))
     # Enrollment is serialized by the USB owner, which also serves clients
     # that use the socket protocol directly. Do not hold this lock across it.
     if args[:1]==['enroll']:
