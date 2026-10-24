@@ -78,13 +78,16 @@ def read(path, mac, now=None):
 class DemoSession:
     """Only temporary tuning and pure DSP: never dispatch a device command."""
     def __init__(self, prefs=None):
-        import equalizer
+        import music
         allowed = ('equalizer_decay_ms', 'equalizer_sensitivity', 'equalizer_gate',
-                   'equalizer_attack_ms', 'equalizer_palette')
+                   'equalizer_attack_ms', 'equalizer_palette','music_style','music_preset','music_custom')
         self.prefs = {key: copy.deepcopy((prefs or {}).get(key, control.DEFAULTS[key])) for key in allowed}
+        self.prefs.update(equalizer=True,kde=False)
         self.sections = layout.legacy(20, reverse_second=True)
         self.sections[0]['placement'], self.sections[1]['placement'] = 'left', 'right'
-        self.analyzer = equalizer.SpatialSpectrum()
+        self.renderer=music.Renderer()
+        self.analyzer=self.renderer.analyzer
+        self.calm_color=None
         self.brightness, self.on, self.sequence = 128, True, 0
         self.lock = threading.RLock()
 
@@ -99,25 +102,42 @@ class DemoSession:
                     raise ValueError('Invalid power state')
                 self.on = value
             elif key in self.prefs:
+                if key in ('music_custom','music_preset','equalizer','kde'):
+                    raise ValueError('Unsupported demo setting')
                 self.prefs[key] = (control.validate_decay_ms(value) if key == 'equalizer_decay_ms'
                                    else control.validate_tuning(key, value))
+                import scenes
+                if key in scenes.TUNING:
+                    self.prefs['music_preset']='custom'
+                    self.prefs['music_custom']={item:self.prefs[item] for item in scenes.TUNING}
             else:
                 raise ValueError('Unsupported demo setting')
 
+    def preset(self,name):
+        import scenes
+        with self.lock:
+            self.prefs=scenes.preset(self.prefs,name)
+
+    def select_scene(self,name):
+        import scenes
+        with self.lock:
+            self.prefs=scenes.select(self.prefs,name)
+            if name=='calm':
+                self.calm_color=control.kde_color()
+
     def process(self, samples):
         with self.lock:
-            self.analyzer.set_response(self.prefs['equalizer_sensitivity'], self.prefs['equalizer_gate'])
-            self.analyzer.set_decay(self.prefs['equalizer_decay_ms'])
-            self.analyzer.set_attack(self.prefs['equalizer_attack_ms'])
-            self.analyzer.process(samples)
+            self.renderer.analyze(samples,self.prefs)
             colors = None
             if self.prefs['equalizer_palette'] == 'wallpaper':
                 import wallpaper
                 colors = wallpaper.cached(control.RUNTIME)['colors']
-            pixels = layout.meter(self.analyzer.level if self.on else 0, self.sections, 20,
-                                  palette=self.prefs['equalizer_palette'], colors=colors)
+            pixels=(self.renderer.pixels(self.prefs,self.sections,20,colors) if self.prefs['equalizer']
+                    else layout.solid(self.calm_color or [0,112,254],self.sections,20))
+            if not self.on:
+                pixels=[[0,0,0] for _ in range(20)]
             self.sequence += 1
             return dict(target='demo', pixels=pixels, brightness=self.brightness,
-                        source='music', sequence=self.sequence, updated=time.monotonic(),
+                        source='music' if self.prefs['equalizer'] else 'calm', sequence=self.sequence, updated=time.monotonic(),
                         stale=False, sections=copy.deepcopy(self.sections), on=self.on,
                         settings=copy.deepcopy(self.prefs))

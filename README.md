@@ -11,8 +11,8 @@ Author: **Chapman**. Licensed under MIT. Please credit Chapman when sharing
 screenshots, builds or articles about this project; retain the copyright and
 license notices when distributing its code.
 
-**0.2.0-alpha.8: local release candidate.** Includes an experimental standalone
-Qt application and transport-free music demo. Generalized device/layout support and
+**0.2.0-alpha.9: local release candidate.** Includes a standalone Qt application,
+transport-free music demo, coherent Pulse style and music presets. Generalized device/layout support and
 the new installer have automated checks. A fresh KDE session and physical LEDs
 still need acceptance before a public release. This candidate does not replace
 an existing installation automatically and has not been published.
@@ -54,7 +54,27 @@ The launcher automatically uses that private GUI interpreter when system Python
 does not provide PySide6. The service interpreter remains `/usr/bin/python3`.
 PySide6 is a separate upstream dependency; WESP's MIT license covers its own code.
 No package manager or elevated privileges are invoked by the application itself.
-New musical scenes and guided strip calibration remain later milestones.
+Guided strip calibration remains a later milestone.
+
+### Music scenes
+
+Choose **Music** or **Calm light** as the base scene; choosing a scene never
+turns on an off device. Music offers the original **Level meter** and **Pulse**:
+a shorter steady bar with a shared smooth accent on low-frequency attacks.
+It does not estimate BPM, strobe or scatter random pixels. Both demo and device
+use the same analyzer/renderer, including section direction and unassigned gaps.
+
+**Soft** and **Vivid** tune sensitivity/gate/attack/decay together. **My tuning**
+restores the manual set saved before a preset; editing a tuning slider creates
+a new manual set. Palette, master brightness, hardware and networking are not
+part of these presets. The original meter remains the default.
+
+The overview names the active base or temporary signal. Selecting Calm light
+during the volume indicator returns to the current desktop accent after the
+indicator expires, without replaying an old pre-music snapshot. Calm currently
+uses the KDE accent; spatial wallpapers and automatic idle scenes are separate work.
+The new Pulse appearance and preset values remain experimental pending owner
+physical acceptance across different music and speech.
 
 ## Features
 

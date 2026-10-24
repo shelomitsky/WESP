@@ -2,6 +2,11 @@
 
 ## Standalone application
 
+Music scenes add deterministic onset/continuous-bass/silence checks and shared
+layout routing, saved-custom/preset validation, configuration-write failure and
+volume→new-scene restoration. The Qt suite selects real style/preset controls
+and checks Calm after Off without any physical device calls.
+
 `python3 check_qml_desktop.py -v` uses PySide6 6.10.2 with the real ApplicationWindow,
 temporary config/runtime and a device-command rejection boundary. Install
 `requirements-gui.txt` in the test environment. The normal release gate stays

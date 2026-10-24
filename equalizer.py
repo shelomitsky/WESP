@@ -71,6 +71,7 @@ class SpatialSpectrum:
         self.hz = np.fft.rfftfreq(SIZE, 1/RATE)
         self.level = 0.0
         self.reference = .1
+        self.bass = 0.0
         self.set_response(100,6)
 
     def set_response(self,sensitivity,gate):
@@ -94,6 +95,7 @@ class SpatialSpectrum:
         centered = samples-samples.mean()
         fft = np.abs(np.fft.rfft(centered*self.window)) / (self.window.sum()/2)
         bass = np.sqrt(np.sum(fft[(self.hz >= 40) & (self.hz < 180)]**2))
+        self.bass = float(bass)
         rms = np.sqrt(np.mean(centered**2))
         # Track the recent programme level, independently of the PC's volume.
         # Headroom prevents loud/compressed tracks from pinning the whole bar.
@@ -138,7 +140,9 @@ def run():
     signal.signal(signal.SIGINT, stop)
     # Keep auto-gain history while reopening the capture on output switches.
     # Otherwise sensitivity would jump back to its initial value every 15s.
-    spatial = SpatialSpectrum(os.environ.get('WLED_EQ_PROFILE', 'fast'))
+    import music
+    renderer=music.Renderer(os.environ.get('WLED_EQ_PROFILE','fast'))
+    spatial=renderer.analyzer
     capture_ms = PROFILES[spatial.profile]['capture_ms']
     LOG.info('Equalizer profile=%s, requested capture=%sms, USB FPS=%s',
              spatial.profile, capture_ms, USB_FPS)
@@ -201,10 +205,8 @@ def run():
                         samples = history if time.monotonic()-last_audio < .1 else np.zeros(SIZE)
                         rgb = analyzer.process(samples)
                         if usb:
-                            spatial.set_decay(prefs.get('equalizer_decay_ms', 250))
-                            spatial.set_response(prefs.get('equalizer_sensitivity',100),prefs.get('equalizer_gate',6))
-                            spatial.set_attack(prefs.get('equalizer_attack_ms',0))
-                        pixels = spatial.process(samples) if usb else None
+                            renderer.analyze(samples,prefs)
+                        pixels = [] if usb else None
                         with control.locked():
                             prefs, mem = control.settings(), control.runtime()
                             if pixels is not None:
@@ -214,11 +216,11 @@ def run():
                                     if prefs.get('equalizer_palette')=='wallpaper':
                                         import wallpaper
                                         colors=wallpaper.cached(control.RUNTIME)['colors']
-                                    pixels=layout.meter(spatial.level,prefs['sections'],prefs['controller']['count'],
-                                                        palette=prefs.get('equalizer_palette','classic'),colors=colors)
+                                    pixels=renderer.pixels(prefs,prefs['sections'],prefs['controller']['count'],colors=colors)
                                 else:
-                                    pixels = orient_pixels(pixels, prefs.get('reverse_first', False),
-                                                           prefs.get('reverse_second', False))
+                                    import layout
+                                    sections=layout.legacy(20,prefs.get('reverse_first',False),prefs.get('reverse_second',False))
+                                    pixels=renderer.pixels(prefs,sections,20)
                             active = control.equalizer_frame(prefs, mem, rgb, pixels=pixels)
                         # Advance against the previous deadline; from-now pacing
                         # would skip every second audio block under minor jitter.

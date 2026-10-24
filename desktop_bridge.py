@@ -16,7 +16,7 @@ import preview
 
 class DeviceBackend:
     COMMANDS = {'status', 'config', 'ports', 'power', 'brightness', 'setting', 'layout',
-                'enroll', 'clear', 'notify-preview', 'firmware-status',
+                'enroll', 'clear', 'notify-preview', 'firmware-status','scene','music-preset',
                 'firmware-prepare', 'firmware-prepare-native', 'firmware-install',
                 'firmware-cancel', 'firmware-connect', 'firmware-native-ready'}
 
@@ -158,6 +158,10 @@ class DesktopModel:
                 self.demo.configure('on', str(args[0]).lower() == 'true')
             elif action == 'setting' and len(args) == 2:
                 self.demo.configure(args[0], args[1])
+            elif action == 'scene' and len(args)==1:
+                self.demo.select_scene(args[0])
+            elif action == 'music-preset' and len(args)==1:
+                self.demo.preset(args[0])
             else:
                 raise ValueError(tr('Leave demo mode to configure your device'))
             return {'ok': True}
@@ -173,6 +177,7 @@ class DesktopModel:
         return result
 
     def poll(self):
+        import scenes
         if self.demo is not None:
             import numpy as np
             record = self.audio.record if self.audio and self.audio.record else self.demo.process(np.zeros(2048))
@@ -181,6 +186,7 @@ class DesktopModel:
                     settings=copy.deepcopy(self.demo.prefs), sections=copy.deepcopy(self.demo.sections),
                     state=dict(on=self.demo.on, bri=self.demo.brightness), frame=record,
                     message=self.audio.message if self.audio else tr('Waiting for desktop audio'),
+                    activity=scenes.activity(self.demo.prefs,{},dict(on=self.demo.on),time.time()),
                     receiver={}, ports=[], firmware={})
         prefs = control.settings()
         selected = prefs.get('controller') or {}
@@ -192,6 +198,7 @@ class DesktopModel:
             try:
                 result = self.backend.command(['status'])
                 data.update(state=result['state'], online=True,
+                            activity=result.get('activity',{}),
                             message=(result.get('equalizer') or {}).get('message', ''))
             except Exception as error:
                 data['error'] = str(error)

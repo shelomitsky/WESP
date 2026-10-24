@@ -9,7 +9,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from PySide6.QtCore import QMetaObject, QObject
+from PySide6.QtCore import QMetaObject, QObject, Q_ARG
 from PySide6.QtGui import QGuiApplication
 
 
@@ -45,6 +45,39 @@ class DesktopWindowTest(unittest.TestCase):
                 time.sleep(.01)
             self.assertFalse(model.demo.on)
             self.assertFalse((Path(folder) / 'settings.json').exists())
+            window.close()
+
+    def test_style_preset_and_calm_scene_keep_demo_isolation_and_off(self):
+        import control,desktop,desktop_bridge
+        with tempfile.TemporaryDirectory() as folder, \
+             patch.object(control,'CONFIG',Path(folder)), \
+             patch.object(control,'RUNTIME',Path(folder)/'runtime'), \
+             patch.object(desktop_bridge.DeviceBackend,'command',side_effect=AssertionError('device command')):
+            model=desktop_bridge.DesktopModel();model.set_demo(True,capture=False)
+            engine,bridge=desktop.create_window(model,demo_capture=False)
+            self.addCleanup(bridge.close)
+            window=engine.rootObjects()[0]
+            style=window.findChild(QObject,'musicStyleCombo');style.setProperty('currentIndex',1)
+            QMetaObject.invokeMethod(style,'activated',Q_ARG(int,1))
+            deadline=time.monotonic()+2
+            while time.monotonic()<deadline and model.demo.prefs['music_style']!='pulse':
+                self.app.processEvents();time.sleep(.01)
+            self.assertEqual(model.demo.prefs['music_style'],'pulse')
+            preset=window.findChild(QObject,'musicPresetCombo');preset.setProperty('currentIndex',1)
+            QMetaObject.invokeMethod(preset,'activated',Q_ARG(int,1))
+            deadline=time.monotonic()+2
+            while time.monotonic()<deadline and model.demo.prefs['music_preset']!='soft':
+                self.app.processEvents();time.sleep(.01)
+            self.assertEqual(model.demo.prefs['music_preset'],'soft')
+            model.demo.configure('on',False)
+            QMetaObject.invokeMethod(window.findChild(QObject,'calmSceneButton'),'click')
+            deadline=time.monotonic()+2
+            while time.monotonic()<deadline and model.demo.prefs['equalizer']:
+                self.app.processEvents();time.sleep(.01)
+            self.assertFalse(model.demo.prefs['equalizer'])
+            self.assertFalse(model.demo.on)
+            self.assertEqual(model.poll()['frame']['pixels'],[[0,0,0]]*20)
+            self.assertFalse((Path(folder)/'settings.json').exists())
             window.close()
 
     def test_polling_keeps_unsaved_receiver_fields_and_configure_clears_password(self):

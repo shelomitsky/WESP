@@ -72,7 +72,7 @@ def payloads():
     for name in ('control.py','equalizer.py','usb_transport.py','usb_probe.py','events.py',
                  'layout.py','notification_fx.py','wallpaper.py','i18n.py','services.py','firmware.py',
                  'wesp_transport.py','receiver_setup.py','receiver_assets.py','manage.py','LICENSE','README.md',
-                 'desktop.py','desktop_bridge.py','preview.py'):
+                 'desktop.py','desktop_bridge.py','preview.py','music.py','scenes.py'):
         result[app/name]=((SOURCE/name).read_bytes(),0o644)
     for file in (SOURCE/'app').glob('*.qml'):
         result[app/'app'/file.name]=(file.read_bytes(),0o644)

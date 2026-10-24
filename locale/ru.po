@@ -803,3 +803,54 @@ msgstr "Здесь появятся ваши ленты. Настройте ESP 
 
 msgid "Open WESP"
 msgstr "Открыть WESP"
+
+msgid "Unknown music preset"
+msgstr "Неизвестная музыкальная настройка"
+
+msgid "Invalid saved music tuning"
+msgstr "Неверные сохранённые музыкальные параметры"
+
+msgid "Unknown lighting scene"
+msgstr "Неизвестная сцена подсветки"
+
+msgid "Unknown music style"
+msgstr "Неизвестный музыкальный рисунок"
+
+msgid "Choose a scene or music preset"
+msgstr "Выберите сцену или музыкальную настройку"
+
+msgid "Calm light"
+msgstr "Спокойный свет"
+
+msgid "Manual lighting"
+msgstr "Ручная подсветка"
+
+msgid "Paused for sleep"
+msgstr "Пауза на время сна"
+
+msgid "Volume · then %1"
+msgstr "Громкость · затем %1"
+
+msgid "Notification over %1"
+msgstr "Уведомление поверх: %1"
+
+msgid "Music style"
+msgstr "Музыкальный рисунок"
+
+msgid "Level meter"
+msgstr "Шкала"
+
+msgid "Pulse"
+msgstr "Пульс"
+
+msgid "Character"
+msgstr "Характер"
+
+msgid "My tuning"
+msgstr "Свой вариант"
+
+msgid "Soft"
+msgstr "Мягко"
+
+msgid "Vivid"
+msgstr "Выразительно"

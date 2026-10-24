@@ -93,7 +93,7 @@ ApplicationWindow {
                 }
                 Item { Layout.fillHeight:true }
                 Button { text:root.demo ? root.t("Back to my device") : root.t("Try without an ESP"); Layout.fillWidth:true; enabled:!bridge.busy; onClicked:bridge.setDemo(!root.demo) }
-                Label { text:root.demo ? root.t("Demo — your device is unchanged") : "0.2.0-alpha.8"; wrapMode:Text.WordWrap; Layout.fillWidth:true; opacity:.6 }
+                Label { text:root.demo ? root.t("Demo — your device is unchanged") : "0.2.0-alpha.9"; wrapMode:Text.WordWrap; Layout.fillWidth:true; opacity:.6 }
             }
         }
         ColumnLayout {
@@ -129,12 +129,14 @@ ApplicationWindow {
                         width:parent.width; spacing:18
                         RowLayout {
                             Layout.fillWidth:true
-                            Button { text:root.t("Music level"); enabled:root.demo || root.data.online; onClicked:root.demo ? root.setting("equalizer_palette",root.prefs.equalizer_palette || "classic") : root.setting("equalizer",true) }
-                            Button { text:root.t("Desktop color"); enabled:!root.demo && root.data.online; onClicked:{ root.setting("equalizer",false); root.setting("kde",true); } }
+                            Button { objectName:"musicSceneButton";text:root.t("Music");checkable:true;checked:!!root.prefs.equalizer;enabled:root.demo || root.data.online;onClicked:bridge.action("scene",["music"]) }
+                            Button { objectName:"calmSceneButton";text:root.t("Calm light");checkable:true;checked:!root.prefs.equalizer && !!root.prefs.kde;enabled:root.demo || root.data.online;onClicked:bridge.action("scene",["calm"]) }
                             Item { Layout.fillWidth:true }
+                            ComboBox { enabled:!!root.prefs.equalizer;model:[root.t("Level meter"),root.t("Pulse")];currentIndex:root.prefs.music_style==="pulse" ? 1 : 0;onActivated:root.setting("music_style",currentIndex ? "pulse" : "meter") }
                             Label { text:root.demo ? root.t("Live demo") : root.t("Host frame preview"); opacity:.6 }
                         }
-                        Label { text:root.data.message || (root.prefs.equalizer ? root.t("Music is enabled") : root.t("Desktop lighting")); wrapMode:Text.WordWrap; Layout.fillWidth:true }
+                        Label { text:(root.data.activity || {}).label || root.data.message || root.t("Desktop lighting"); wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:17 }
+                        Label { visible:!!root.prefs.equalizer; text:root.data.message || ""; opacity:.65;wrapMode:Text.WordWrap;Layout.fillWidth:true }
                         Label { visible:!root.sections.length; text:root.t("Your strips will appear here. Open Connection to set up your ESP, or try without one."); wrapMode:Text.WordWrap; Layout.fillWidth:true; topPadding:40; bottomPadding:40 }
                         Repeater {
                             model:root.sections
@@ -173,7 +175,11 @@ ApplicationWindow {
                     clip:true; contentWidth:availableWidth
                     ColumnLayout {
                         width:parent.width; spacing:18
-                        Switch { text:root.t("React to desktop music"); checked:root.demo || !!root.prefs.equalizer; enabled:!root.demo; onClicked:root.setting("equalizer",checked) }
+                        Switch { text:root.t("React to desktop music");checked:!!root.prefs.equalizer;onClicked:bridge.action("scene",[checked ? "music" : "calm"]) }
+                        Label { text:root.t("Music style");font.pixelSize:17 }
+                        ComboBox { objectName:"musicStyleCombo";Layout.fillWidth:true;model:[root.t("Level meter"),root.t("Pulse")];property var keys:["meter","pulse"];currentIndex:Math.max(0,keys.indexOf(root.prefs.music_style || "meter"));onActivated:root.setting("music_style",keys[currentIndex]) }
+                        Label { text:root.t("Character");font.pixelSize:17 }
+                        ComboBox { objectName:"musicPresetCombo";Layout.fillWidth:true;model:[root.t("My tuning"),root.t("Soft"),root.t("Vivid")];property var keys:["custom","soft","vivid"];currentIndex:Math.max(0,keys.indexOf(root.prefs.music_preset || "custom"));onActivated:bridge.action("music-preset",[keys[currentIndex]]) }
                         Label { text:root.t("Palette"); font.pixelSize:17 }
                         ComboBox { Layout.fillWidth:true; model:[root.t("Classic"),root.t("Fire"),root.t("Ocean"),root.t("Violet"),root.t("Rainbow"),root.t("Wallpaper colors")]; property var keys:["classic","fire","ocean","violet","rainbow","wallpaper"]; currentIndex:Math.max(0,keys.indexOf(root.prefs.equalizer_palette || "classic")); onActivated:root.setting("equalizer_palette",keys[currentIndex]) }
                         Repeater {

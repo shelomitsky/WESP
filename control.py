@@ -21,10 +21,14 @@ DEFAULTS = dict(host='', kde=True, volume=True, notify=True,
                 equalizer_decay_ms=250, controller=None, sections=[])
 DEFAULTS.update(equalizer_sensitivity=100,equalizer_gate=6,notify_style='flash',
                 notify_color='#8000ff',notify_strength=60,equalizer_attack_ms=0,
-                equalizer_palette='classic')
+                equalizer_palette='classic',music_style='meter',music_preset='custom',music_custom={})
 
 
 def validate_tuning(key,value):
+    if key=='music_style':
+        if value not in ('meter','pulse'):
+            raise ValueError(tr('Unknown music style'))
+        return value
     if key=='equalizer_palette':
         import layout
         layout.palette_colors(value)
@@ -156,7 +160,8 @@ def runtime():
     saved=read_json(RUNTIME/'state.json',{})
     if saved.get('controller_mac') != identity:
         return default  # never replay another controller's snapshot
-    return default | saved
+    import scenes
+    return scenes.memory(settings(),default | saved)
 
 
 def request(prefs, payload=None):
@@ -384,6 +389,23 @@ def execute(args):
     cmd = args[0]
     prefs = settings()
     mem = runtime()
+    if cmd in ('scene','music-preset'):
+        import scenes
+        if len(args)!=2:
+            raise ValueError(tr('Choose a scene or music preset'))
+        prefs=scenes.select(prefs,args[1]) if cmd=='scene' else scenes.preset(prefs,args[1])
+        CONFIG.mkdir(parents=True,exist_ok=True,mode=0o700)
+        write_json(CONFIG/'settings.json',prefs)
+        mem=scenes.memory(prefs,mem)
+        warning=''
+        if cmd=='scene' and prefs.get('controller'):
+            try:
+                apply(prefs,mem)
+            except Exception as error:
+                warning=tr('Setting saved, but the device is unavailable')
+                print('WESP: '+str(error),file=sys.stderr)
+        write_json(RUNTIME/'state.json',mem)
+        return dict(ok=True,settings=prefs,warning=warning)
     if cmd == 'ports':
         import serial.tools.list_ports
         ports = [dict(port=p.device, name=p.description, label=p.device+' · '+p.description) for p in serial.tools.list_ports.comports()
@@ -432,7 +454,9 @@ def execute(args):
         worker = read_json(RUNTIME / 'equalizer-status.json', {})
         if prefs['equalizer'] and time.time() - worker.get('updated', 0) > 6:
             worker = dict(message=tr("Equalizer worker is not running"))
-        return dict(ok=True, state=device_state(prefs), settings=prefs,
+        import scenes
+        state=device_state(prefs)
+        return dict(ok=True,state=state,settings=prefs,activity=scenes.activity(prefs,mem,state,time.time()),
                     notifications=len(mem['ids']), equalizer=worker,wallpaper=wallpaper_palette)
     if not prefs.get('controller') and cmd in ('volume','volume-end','notify-add','notify-close','clear','apply','sleep','wake','shutdown'):
         return dict(ok=True)
@@ -474,7 +498,7 @@ def execute(args):
             mem = dict(ids=[], volumeUntil=0, base={}, suspended=False, resume=None)
         elif key == 'equalizer_decay_ms':
             prefs[key] = validate_decay_ms(value)
-        elif key in ('equalizer_palette','equalizer_sensitivity','equalizer_gate','equalizer_attack_ms','notify_style','notify_color','notify_strength'):
+        elif key in ('equalizer_palette','equalizer_sensitivity','equalizer_gate','equalizer_attack_ms','notify_style','notify_color','notify_strength','music_style'):
             prefs[key]=validate_tuning(key,value)
             if key=='notify_style' and mem['ids']:
                 mem['notifyStarted']=max(time.time(),mem['volumeUntil'])
@@ -489,12 +513,16 @@ def execute(args):
                 mem['volumeUntil'] = 0
         else:
             raise ValueError(tr("Invalid setting"))
+        import scenes
+        if key in scenes.TUNING:
+            prefs['music_preset']='custom'
+            prefs['music_custom']={item:prefs.get(item,DEFAULTS[item]) for item in scenes.TUNING}
         CONFIG.mkdir(parents=True, exist_ok=True, mode=0o700)
         write_json(CONFIG / 'settings.json', prefs)
         write_json(RUNTIME / 'state.json', mem)
         warning = ''
         if key not in ('host', 'reverse_first', 'reverse_second', 'equalizer_decay_ms',
-                       'equalizer_palette','equalizer_sensitivity','equalizer_gate','equalizer_attack_ms','notify_style','notify_color','notify_strength'):
+                       'equalizer_palette','equalizer_sensitivity','equalizer_gate','equalizer_attack_ms','notify_style','notify_color','notify_strength','music_style'):
             try:
                 if key == 'equalizer' and value == 'false':
                     release_equalizer(prefs, mem)

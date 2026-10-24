@@ -1,6 +1,6 @@
 # Release candidate acceptance
 
-Product: WESP. Version: 0.2.0-alpha.8. Author: Chapman. License: MIT.
+Product: WESP. Version: 0.2.0-alpha.9. Author: Chapman. License: MIT.
 The first alpha targets KDE Plasma 6; the product name is desktop-independent.
 
 ## Standalone application — alpha.8
@@ -18,8 +18,20 @@ The first alpha targets KDE Plasma 6; the product name is desktop-independent.
 - [ ] Hardware and demo toggling while a real music session continues unchanged.
 - [ ] Visible language/theme/layout acceptance of all application pages.
 
-New musical scenes/Pulse, guided first-light and spatial wallpapers are future
-milestones, not claimed implemented by moving the existing controls to a window.
+Guided first-light and spatial wallpapers remain future milestones.
+
+## Music scenes — alpha.9
+
+- [x] Shared demo/device Renderer: original meter or coherent onset Pulse;
+  continuous bass does not become repeated beats, silence/noise stays bounded.
+- [x] Soft/Vivid/custom tuning preserves the palette/controller and restores
+  the previous manual set; invalid saved tuning cannot import hardware fields.
+- [x] Scene changes respect Off and volume priority. Volume expiry restores the
+  newly selected Calm scene without replaying the previous music snapshot.
+- [x] Actual Qt style/preset/scene controls preserve demo isolation and Off.
+- [ ] Owner A/B demo acceptance of Pulse and preset character.
+- [ ] Physical Pulse/music/speech/silence test on both configured sections.
+- [ ] Physical scene/overlay/Off/sleep lifecycle from the standalone window.
 
 ## Implemented and automated
 

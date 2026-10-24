@@ -1,3 +1,13 @@
+# 0.2.0-alpha.9 (candidate)
+
+- Add coherent Pulse accents and retain the original meter, with one renderer
+  shared by demo and device and no new audio dependencies.
+- Add Soft/Vivid tuning presets and restoration of the user's manual tuning;
+  preserve palette, master brightness and controller/network configuration.
+- Select Music/Calm base scenes atomically and invalidate stale scene snapshots;
+  Off remains independent, and temporary overlays return to the current scene.
+- Show the active scene/temporary source in the standalone overview.
+
 # 0.2.0-alpha.8 (candidate)
 
 - Add a standalone PySide6/Qt Quick application, application-menu entry and
