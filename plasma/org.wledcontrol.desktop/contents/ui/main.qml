@@ -129,7 +129,7 @@ PlasmoidItem {
         tuningDelay.restart();
     }
     function request(args) {
-        if (args[0] === "status" && busy) return;
+        if (args[0] === "status" && (busy || firmwareBusy)) return;
         Commands.enqueue(queue, args);
         dispatch();
     }
@@ -228,7 +228,7 @@ PlasmoidItem {
             else if (refresh) root.request(["status"]);
         }
     }
-    Component.onCompleted: { request(["status"]); request(["ports"]); request(["firmware-status"]); }
+    Component.onCompleted: { request(["firmware-status"]); request(["ports"]); request(["status"]); }
     Timer {
         interval: 1500
         repeat: true
