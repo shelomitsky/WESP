@@ -196,6 +196,10 @@ class TransportTests(unittest.TestCase):
         self.assertNotIn('password', json.dumps(status))
         self.assertNotIn(TOKEN, json.dumps(status))
 
+    def test_setup_status_reports_host_transport_instead_of_peer_claim(self):
+        device, _ = self.device(lambda req, reply: reply.update(connection='usb'))
+        self.assertEqual(device.setup_status().get('connection'),'wifi')
+
     def test_sequence_session_and_private_state(self):
         device, server = self.device()
         device.query()
@@ -264,6 +268,7 @@ class TransportTests(unittest.TestCase):
         result = device.configure([dict(gpio=2, count=2, order='GRB')], 500,
                                   ssid='test-network', password='test-password')
         self.assertEqual(result['count'], 2)
+        self.assertEqual(result['connection'], 'usb')
         self.assertEqual(device.led_count, 2)
         self.assertNotIn('password', json.dumps(result))
         self.assertEqual(device.pair(), dict(paired=True, mac=MAC))

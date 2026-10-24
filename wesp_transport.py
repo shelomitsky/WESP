@@ -390,8 +390,10 @@ class Device:
                 raise
             self.last_frame = None
             # Only explicitly selected, non-secret fields leave this boundary.
-            return {key: copy.deepcopy(self.document[key]) for key in
-                    ('mac', 'count', 'outputs', 'max_milliamps', 'wifi') if key in self.document}
+            result = {key: copy.deepcopy(self.document[key]) for key in
+                      ('mac', 'count', 'outputs', 'max_milliamps', 'wifi') if key in self.document}
+            result['connection'] = self.connection
+            return result
 
     def pair(self):
         if self.connection != 'usb':
@@ -405,9 +407,11 @@ class Device:
             # State/frame ACKs intentionally contain only the common fields.
             # Request full current metadata, including asynchronous Wi-Fi join.
             self._run('hello')
-            return {key: copy.deepcopy(self.document[key]) for key in
-                    ('mac', 'count', 'outputs', 'max_milliamps', 'wifi', 'firmware', 'version', 'watchdog_ms')
-                    if key in self.document}
+            result = {key: copy.deepcopy(self.document[key]) for key in
+                      ('mac', 'count', 'outputs', 'max_milliamps', 'wifi', 'firmware', 'version', 'watchdog_ms')
+                      if key in self.document}
+            result['connection'] = self.connection
+            return result
 
     get_info = setup_status
 

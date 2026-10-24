@@ -618,6 +618,12 @@ msgstr "Сохранить выходы и сеть в ESP"
 msgid "Use Wi-Fi"
 msgstr "Работать по Wi-Fi"
 
+msgid "Using Wi-Fi"
+msgstr "Управление по Wi-Fi"
+
+msgid "Wi-Fi · LEDs: %1"
+msgstr "Wi-Fi · Светодиоды: %1"
+
 msgid "WESP receiver: outputs and Wi-Fi"
 msgstr "Контроллер WESP: выходы и Wi-Fi"
 

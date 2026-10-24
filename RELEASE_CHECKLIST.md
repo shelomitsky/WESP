@@ -81,14 +81,24 @@ Explicit main-mode selection, manual RGB and a standalone wallpaper mode; spatia
 firmware workflow. These remain future work. Global wallpaper palette extraction
 and standard slideshow following are already implemented.
 
-## Experimental native receiver acceptance (open)
+## Experimental native receiver acceptance (partially verified, 2026-10-24)
 
-- [ ] Install native firmware from the widget on the explicitly selected test ESP.
-- [ ] Configure real GPIO/count/order/current limit through USB widget setup.
-- [ ] Join Wi-Fi, verify MAC/token over TCP and stable hostname/IP fallback.
-- [ ] Move to a separate suitable power supply and verify real lighting.
+- [x] Install native firmware from the widget on the explicitly selected test ESP.
+- [x] Configure GPIO/count/order/current limit and Wi-Fi through USB widget setup.
+- [x] Join Wi-Fi and verify the selected MAC/token over TCP; use the widget to
+  switch the desktop owner from USB to Wi-Fi.
+- [x] Move the receiver to a separate USB supply: the computer USB port disappears,
+  the receiver rejoins Wi-Fi and the existing desktop owner receives repeated
+  verified status replies. Settings survive the power cycle.
+- [ ] Verify real lighting from the separate suitable power supply.
+- [ ] Exercise hostname/IP fallback recovery after DHCP or DNS changes.
 - [ ] Stop the PC sender and measure physical dark within the 1.5-second target.
 - [ ] Test reboot, USB/network interruptions, wrong identity and configuration recovery.
+
+The owner confirmed the widget installation/configuration and separate USB supply
+steps. Status checks verified identity and retained settings after that power
+cycle. The strips were disconnected; LED output and physical darkness are not
+accepted by these checks.
 
 ESP32 compile and native host/safety tests do not close these physical gates.
 The previously accepted WLED board must remain unchanged.

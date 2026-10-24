@@ -52,6 +52,8 @@ PlasmoidItem {
     property string receiverSsid: ""
     property string receiverPassword: ""
     property bool receiverNetworkDirty: false
+    property string selectedReceiverConnection: "usb"
+    readonly property bool receiverUsingWifi: (receiverInfo.connection || selectedReceiverConnection) === "wifi"
 
     function editOutput(index,key,value) {
         var copy=JSON.parse(JSON.stringify(receiverOutputs));
@@ -154,6 +156,11 @@ PlasmoidItem {
         runner.connectSource(source);
     }
     function acceptResult(data) {
+        if (data.ok === true && (activeCommand[0] === "enroll" || activeCommand[0] === "firmware-connect")) {
+            receiverInfo=({}); receiverOutputs=[];
+            receiverSsid=""; receiverPassword=""; receiverNetworkDirty=false;
+            receiverCurrentBudget=500; selectedReceiverConnection="usb";
+        }
         if (data.setup && data.setup.url) {
             setupEndpoint=data.setup;
             var action=pendingSetupAction; pendingSetupAction="";
@@ -184,6 +191,7 @@ PlasmoidItem {
             notifyColor = data.settings.notify_color || "#8000ff";
             notifyStrength = data.settings.notify_strength === undefined ? 60 : data.settings.notify_strength;
             var controller = data.settings.controller;
+            selectedReceiverConnection = controller && controller.backend === "wesp" ? controller.connection || "usb" : "usb";
             ledCount = controller ? controller.count : 0;
             if (controller && (!selectedPort || activeCommand[0] === "enroll")) selectedPort = controller.port;
             sections = data.settings.sections || [];
@@ -753,7 +761,7 @@ PlasmoidItem {
                         }
                         RowLayout {
                             QQC2.Button {text:i18nd("plasma_applet_org.wledcontrol.desktop", "Check Wi-Fi"); enabled:!!root.receiverInfo.mac && !root.busy; onClicked:root.setupRequest("status")}
-                            QQC2.Button {text:i18nd("plasma_applet_org.wledcontrol.desktop", "Use Wi-Fi"); enabled:!!root.receiverInfo.mac && !root.busy && !!root.receiverInfo.wifi && root.receiverInfo.wifi.connected; onClicked:root.setupRequest("wifi")}
+                            QQC2.Button {text:root.receiverUsingWifi ? i18nd("plasma_applet_org.wledcontrol.desktop", "Using Wi-Fi") : i18nd("plasma_applet_org.wledcontrol.desktop", "Use Wi-Fi"); enabled:!root.receiverUsingWifi && !!root.receiverInfo.mac && !root.busy && !!root.receiverInfo.wifi && root.receiverInfo.wifi.connected; onClicked:root.setupRequest("wifi")}
                         }
                     }
                 }
@@ -949,7 +957,9 @@ PlasmoidItem {
         }
         QQC2.Label {
             visible: root.transport === "usb"
-            text: i18nd("plasma_applet_org.wledcontrol.desktop", "USB · LEDs: %1", root.ledCount)
+            text: root.receiverUsingWifi
+                ? i18nd("plasma_applet_org.wledcontrol.desktop", "Wi-Fi · LEDs: %1", root.ledCount)
+                : i18nd("plasma_applet_org.wledcontrol.desktop", "USB · LEDs: %1", root.ledCount)
             opacity: 0.7
             font.pointSize: Kirigami.Theme.smallFont.pointSize
         }
