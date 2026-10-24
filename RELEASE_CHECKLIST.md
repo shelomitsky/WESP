@@ -98,15 +98,18 @@ and standard slideshow following are already implemented.
 - [ ] Exercise hostname/IP fallback recovery after DHCP or DNS changes.
 - [ ] Measure physical darkness timing against the 1.5-second target.
 - [ ] Test reboot, USB/network interruptions, wrong identity and configuration recovery.
-- [ ] Firmware 0.1.1: verify amber startup, green new-session welcome, quiet
-  repeated status polling, immediate Off and frame-loss behavior on the board.
+- [x] Firmware 0.1.1: the owner confirmed amber startup and green new-session
+  runners on both strips, followed by darkness. App-only USB update retained
+  byte-identical boot/NVS/OTA regions; authenticated Wi-Fi reconnected.
+- [ ] Firmware 0.1.1: physically retest Off during a cue and frame-loss behavior.
 
 The owner confirmed the widget installation/configuration and separate USB supply
 steps. Status checks verified identity and retained settings after that power
 cycle. The owner then connected the strips and accepted the dim blue output
 test, music reaction and functional frame-loss/recovery test on firmware 0.1.0.
-Physical darkness timing remains unmeasured. Firmware 0.1.1 welcome animations
-require their separate physical acceptance above.
+Physical darkness timing remains unmeasured. The owner separately accepted
+the firmware 0.1.1 welcome sequence; deterministic native tests cover repeated
+hello, Off and frame-expiry cancellation, but physical timing remains open.
 
 ESP32 compile and native host/safety tests do not close these physical gates.
 The previously accepted WLED board must remain unchanged.
