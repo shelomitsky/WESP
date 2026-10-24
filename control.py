@@ -84,9 +84,15 @@ def persist_enrollment(selected):
     """Prepare both documents before the USB owner commits its new Device."""
     import layout
     prefs=settings()
-    if prefs.get('controller')==selected and prefs.get('sections'):
-        sections=layout.validate(prefs['sections'],selected['count'])
-    else:
+    previous=prefs.get('controller') or {}
+    sections=None
+    if previous.get('mac')==selected['mac'] and prefs.get('sections'):
+        try:
+            sections=layout.validate(prefs['sections'],selected['count'])
+        except ValueError:
+            if previous.get('count')==selected['count']:
+                raise
+    if sections is None:
         sections=[dict(id='main',name=tr("Lighting"),start=0,count=selected['count'],
                        reverse=False,placement='custom')]
     prefs.update(controller=selected,sections=sections,equalizer=False,transport='usb')

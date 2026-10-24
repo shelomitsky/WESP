@@ -70,6 +70,16 @@ class ConfigurationTest(unittest.TestCase):
         self.assertFalse(result['configured'])
         self.assertIsNone(result['settings']['controller'])
 
+    def test_same_board_keeps_valid_sections_when_transport_or_count_changes(self):
+        sections=[dict(id='left',name='Left',start=0,count=10,reverse=True,placement='left'),
+                  dict(id='right',name='Right',start=10,count=10,reverse=False,placement='right')]
+        for old_count in (20,30):
+            old=dict(port='/dev/ttyUSB0',mac='021122334455',count=old_count,backend='wesp',connection='usb')
+            control.write_json(self.config/'settings.json',dict(controller=old,sections=sections))
+            selected=dict(old,count=20,connection='wifi',host='wesp-334455.local')
+            control.persist_enrollment(selected)
+            self.assertEqual(control.settings()['sections'],sections)
+
     def test_identity_and_count_are_enrolled_not_embedded(self):
         info=dict(info=dict(mac='021122334455',leds=dict(count=37)),state=dict(on=True,bri=128))
         device=usb_transport.Device('/dev/ttyUSB8',expected_mac='021122334455',led_count=37)
