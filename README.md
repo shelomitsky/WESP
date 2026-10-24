@@ -11,7 +11,8 @@ Author: **Chapman**. Licensed under MIT. Please credit Chapman when sharing
 screenshots, builds or articles about this project; retain the copyright and
 license notices when distributing its code.
 
-**0.2.0-alpha.11: local release candidate.** Includes a standalone Qt application,
+**0.2.0-alpha.12: local release candidate.** Stable desktop-output capture follows
+actual output changes; receiver errors do not recreate the recording stream. Includes a standalone Qt application,
 transport-free music demo, coherent Pulse style, music presets, bounded strip checks
 and output configuration over Wi-Fi for native firmware 0.1.2. Generalized device/layout support and
 the new installer have automated checks. A fresh KDE session and physical LEDs

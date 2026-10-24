@@ -10,6 +10,7 @@ import urllib.parse
 import urllib.request
 
 import control
+from audio_source import OutputMonitor
 from i18n import tr
 import preview
 
@@ -76,53 +77,59 @@ class DemoAudio:
 
     def run(self):
         import numpy as np
-        while not self.stop.is_set():
-            process = None
-            try:
-                process = subprocess.Popen(['parec', '--device=@DEFAULT_MONITOR@', '--raw',
-                    '--format=float32le', '--rate=48000', '--channels=1', '--latency-msec=10',
-                    '--client-name=WESP Preview'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-                import os
-                os.set_blocking(process.stdout.fileno(), False)
-                history, pending = np.zeros(2048, dtype='<f4'), bytearray()
-                opened = last_audio = time.monotonic()
-                next_frame = opened
-                with selectors.DefaultSelector() as selector:
-                    selector.register(process.stdout, selectors.EVENT_READ)
-                    while not self.stop.is_set() and time.monotonic() - opened < 15:
-                        if selector.select(.015):
-                            chunk = os.read(process.stdout.fileno(), 65536)
-                            if not chunk:
-                                raise RuntimeError('Capture ended')
-                            pending.extend(chunk)
-                            complete = len(pending) // 4 * 4
-                            if complete:
-                                take = min(complete // 4, 2048)
-                                values = np.frombuffer(bytes(pending[complete-take*4:complete]), dtype='<f4')
-                                del pending[:complete]
-                                history = np.concatenate((history[take:], values))
-                                last_audio = time.monotonic()
-                        now = time.monotonic()
-                        if now - last_audio > 2:
-                            raise RuntimeError('Capture stalled')
-                        if now >= next_frame:
-                            samples = history if now-last_audio < .1 else np.zeros(2048)
-                            self.record = self.session.process(samples)
-                            self.message = tr('Reacting to music') if np.max(np.abs(samples)) > .006 else tr('Silence — play audio on your computer')
-                            next_frame = now + 1/60
-            except Exception:
-                self.message = tr('Desktop audio unavailable — retrying')
-                self.record = self.session.process(np.zeros(2048))
-                self.stop.wait(1)
-            finally:
-                if process is not None:
-                    process.terminate()
-                    try:
-                        process.wait(timeout=2)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait()
-                    process.stdout.close()
+        monitor=OutputMonitor()
+        try:
+            while not self.stop.is_set():
+                process = None
+                try:
+                    source=monitor.source
+                    process = subprocess.Popen(['parec', '--device='+source, '--raw',
+                        '--format=float32le', '--rate=48000', '--channels=1', '--latency-msec=10',
+                        '--client-name=WESP Preview', '--stream-name=Desktop output monitor',
+                        '--property=media.role=music', '--property=application.icon_name=wled-control'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                    import os
+                    os.set_blocking(process.stdout.fileno(), False)
+                    history, pending = np.zeros(2048, dtype='<f4'), bytearray()
+                    opened = last_audio = time.monotonic()
+                    next_frame = opened
+                    with selectors.DefaultSelector() as selector:
+                        selector.register(process.stdout, selectors.EVENT_READ)
+                        while not self.stop.is_set() and monitor.source==source:
+                            if selector.select(.015):
+                                chunk = os.read(process.stdout.fileno(), 65536)
+                                if not chunk:
+                                    raise RuntimeError('Capture ended')
+                                pending.extend(chunk)
+                                complete = len(pending) // 4 * 4
+                                if complete:
+                                    take = min(complete // 4, 2048)
+                                    values = np.frombuffer(bytes(pending[complete-take*4:complete]), dtype='<f4')
+                                    del pending[:complete]
+                                    history = np.concatenate((history[take:], values))
+                                    last_audio = time.monotonic()
+                            now = time.monotonic()
+                            if now - last_audio > 2:
+                                raise RuntimeError('Capture stalled')
+                            if now >= next_frame:
+                                samples = history if now-last_audio < .1 else np.zeros(2048)
+                                self.record = self.session.process(samples)
+                                self.message = tr('Reacting to music') if np.max(np.abs(samples)) > .006 else tr('Silence — play audio on your computer')
+                                next_frame = now + 1/60
+                except Exception:
+                    self.message = tr('Desktop audio unavailable — retrying')
+                    self.record = self.session.process(np.zeros(2048))
+                    self.stop.wait(1)
+                finally:
+                    if process is not None:
+                        process.terminate()
+                        try:
+                            process.wait(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait()
+                        process.stdout.close()
+        finally:
+            monitor.close()
 
     def close(self):
         self.stop.set()

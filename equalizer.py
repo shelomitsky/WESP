@@ -10,6 +10,7 @@ import time
 
 import numpy as np
 import control
+from audio_source import OutputMonitor
 
 LOG = logging.getLogger('wled-equalizer')
 RATE, SIZE, FPS = 48000, 2048, 15
@@ -160,7 +161,8 @@ def run():
     renderer=music.Renderer(os.environ.get('WLED_EQ_PROFILE','fast'))
     spatial=renderer.analyzer
     feature_source=AudioFeatures()
-    native=False;capability_checked=0
+    native=False;capability_checked=0;network_retry_at=0
+    monitor=None
     capture_ms = PROFILES[spatial.profile]['capture_ms']
     LOG.info('Equalizer profile=%s, requested capture=%sms, USB FPS=%s',
              spatial.profile, capture_ms, USB_FPS)
@@ -170,16 +172,19 @@ def run():
             try:
                 prefs, mem = control.settings(), control.runtime()
                 if not prefs['equalizer'] or mem['suspended']:
+                    if monitor is not None:monitor.close();monitor=None
                     restore()
                     status(tr("Paused") if mem['suspended'] else tr("Disabled"))
                     time.sleep(.3)
                     continue
-                # Only the output monitor; never a microphone. Reopen periodically
-                # so changes to the default output device are picked up.
+                # Keep one stream until the default OUTPUT actually changes.
+                if monitor is None:monitor=OutputMonitor()
+                source=monitor.source
                 proc = subprocess.Popen([
-                    'parec', '--device=@DEFAULT_MONITOR@', '--raw',
+                    'parec', '--device='+source, '--raw',
                     '--format=float32le', '--rate=48000', '--channels=1',
-                    f'--latency-msec={capture_ms}', '--client-name=WLED Equalizer'],
+                    f'--latency-msec={capture_ms}', '--client-name=WESP Audio', '--stream-name=Desktop output monitor',
+                    '--property=media.role=music', '--property=application.icon_name=wled-control'],
                     stdout=subprocess.PIPE)
                 os.set_blocking(proc.stdout.fileno(), False)
                 analyzer = Spectrum()
@@ -189,7 +194,7 @@ def run():
                 pending = bytearray()
                 next_frame = time.monotonic()
                 have_audio = False
-                opened = last_audio = time.monotonic()
+                last_audio = time.monotonic()
                 last_status = 0
                 with selectors.DefaultSelector() as selector:
                     selector.register(proc.stdout, selectors.EVENT_READ)
@@ -197,7 +202,7 @@ def run():
                         prefs, mem = control.settings(), control.runtime()
                         if not prefs['equalizer'] or mem['suspended']:
                             break
-                        if time.monotonic() - opened > 15:
+                        if monitor.source != source:
                             break
                         wait = min(.2, max(0, next_frame-time.monotonic())) if have_audio else .2
                         if selector.select(wait):
@@ -221,40 +226,50 @@ def run():
                         # Render on a timer, independent of audio batch sizes.
                         # If the source stops sending, fade instead of holding a peak.
                         samples = history if time.monotonic()-last_audio < .1 else np.zeros(SIZE)
-                        if usb and (prefs.get('controller') or {}).get('backend')=='wesp' and time.monotonic()-capability_checked>=1:
-                            import usb_transport
-                            native=usb_transport.client(native={'action':'capabilities'}) is True
-                            capability_checked=time.monotonic()
-                        elif (prefs.get('controller') or {}).get('backend')!='wesp':native=False
-                        fps=20 if native else USB_FPS if usb else FPS
-                        features=feature_source.process(samples) if native else None
-                        rgb = None if native else analyzer.process(samples)
-                        if usb and not native:
-                            renderer.analyze(samples,prefs)
-                        pixels = [] if usb and not native else None
-                        colors=None
-                        if native and prefs.get('equalizer_palette')=='wallpaper':
-                            import wallpaper
-                            colors=wallpaper.cached(control.RUNTIME)['colors']
-                        with control.locked():
-                            prefs, mem = control.settings(), control.runtime()
-                            if pixels is not None:
-                                if prefs.get('controller') and prefs.get('sections'):
-                                    import layout
-                                    colors=None
-                                    if prefs.get('equalizer_palette')=='wallpaper':
-                                        import wallpaper
-                                        colors=wallpaper.cached(control.RUNTIME)['colors']
-                                    pixels=renderer.pixels(prefs,prefs['sections'],prefs['controller']['count'],colors=colors)
-                                else:
-                                    import layout
-                                    sections=layout.legacy(20,prefs.get('reverse_first',False),prefs.get('reverse_second',False))
-                                    pixels=renderer.pixels(prefs,sections,20)
-                            was_native=mem.get('nativeEffects',False)
-                            active = (control.equalizer_frame(prefs,mem,rgb,features=features,colors=colors) if native
-                                      else control.equalizer_frame(prefs,mem,rgb,pixels=pixels))
-                            if native and not was_native and mem.get('nativeEffects'):
-                                control.write_json(control.RUNTIME/'state.json',mem)
+                        if time.monotonic()<network_retry_at:
+                            next_frame=time.monotonic()+.05
+                            continue
+                        try:
+                            if usb and (prefs.get('controller') or {}).get('backend')=='wesp' and time.monotonic()-capability_checked>=1:
+                                import usb_transport
+                                native=usb_transport.client(native={'action':'capabilities'}) is True
+                                capability_checked=time.monotonic()
+                            elif (prefs.get('controller') or {}).get('backend')!='wesp':native=False
+                            fps=20 if native else USB_FPS if usb else FPS
+                            features=feature_source.process(samples) if native else None
+                            rgb = None if native else analyzer.process(samples)
+                            if usb and not native:
+                                renderer.analyze(samples,prefs)
+                            pixels = [] if usb and not native else None
+                            colors=None
+                            if native and prefs.get('equalizer_palette')=='wallpaper':
+                                import wallpaper
+                                colors=wallpaper.cached(control.RUNTIME)['colors']
+                            with control.locked():
+                                prefs, mem = control.settings(), control.runtime()
+                                if pixels is not None:
+                                    if prefs.get('controller') and prefs.get('sections'):
+                                        import layout
+                                        colors=None
+                                        if prefs.get('equalizer_palette')=='wallpaper':
+                                            import wallpaper
+                                            colors=wallpaper.cached(control.RUNTIME)['colors']
+                                        pixels=renderer.pixels(prefs,prefs['sections'],prefs['controller']['count'],colors=colors)
+                                    else:
+                                        import layout
+                                        sections=layout.legacy(20,prefs.get('reverse_first',False),prefs.get('reverse_second',False))
+                                        pixels=renderer.pixels(prefs,sections,20)
+                                was_native=mem.get('nativeEffects',False)
+                                active = (control.equalizer_frame(prefs,mem,rgb,features=features,colors=colors) if native
+                                          else control.equalizer_frame(prefs,mem,rgb,pixels=pixels))
+                                if native and not was_native and mem.get('nativeEffects'):
+                                    control.write_json(control.RUNTIME/'state.json',mem)
+                        except Exception:
+                            LOG.exception('Receiver unavailable; keeping desktop audio capture')
+                            status(tr('Receiver unavailable — audio capture remains active'))
+                            network_retry_at=time.monotonic()+.5
+                            next_frame=time.monotonic()+.05
+                            continue
                         # Advance against the previous deadline; from-now pacing
                         # would skip every second audio block under minor jitter.
                         now = time.monotonic()
@@ -289,6 +304,7 @@ def run():
                         proc.wait()
                     proc.stdout.close()
     finally:
+        if monitor is not None:monitor.close()
         restore()
 
 

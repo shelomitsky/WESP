@@ -1100,3 +1100,6 @@ msgstr "Ожидание подтверждения, с"
 
 msgid "Wallpaper connection timeout"
 msgstr "Отключение подсветки обоев при потере связи"
+
+msgid "Receiver unavailable — audio capture remains active"
+msgstr "Контроллер недоступен — захват звука продолжает работать"

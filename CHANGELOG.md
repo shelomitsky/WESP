@@ -1,3 +1,12 @@
+# 0.2.0-alpha.12 (candidate)
+
+- Keep desktop-output capture alive while the output is unchanged. Follow actual
+  default-output changes instead of recreating a recording every fifteen seconds.
+- Receiver/network errors retry delivery without destroying the capture stream.
+- Replace the stale WLED Equalizer audio-client label with WESP Audio. Capture
+  uses the output monitor; desktop privacy indicators may still call it recording.
+- Apply stable capture to the window-scoped demo as well.
+
 # 0.2.0-alpha.11 (candidate)
 
 - Native receiver0.2.0 runs music envelopes, meter/Pulse, steady-tone repeats,

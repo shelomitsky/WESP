@@ -56,7 +56,7 @@ def doctor():
                            check=True,capture_output=True,timeout=8)
         except (OSError,subprocess.SubprocessError):
             missing.append('PySide6 (standalone GUI)')
-    missing += [name for name in ('parec','wpctl','systemctl','plasmashell') if not shutil.which(name)]
+    missing += [name for name in ('parec','pactl','wpctl','systemctl','plasmashell') if not shutil.which(name)]
     if not missing:
         try:
             from gi.repository import GLib
@@ -72,7 +72,7 @@ def payloads():
     for name in ('control.py','equalizer.py','usb_transport.py','usb_probe.py','events.py',
                  'layout.py','notification_fx.py','wallpaper.py','i18n.py','services.py','firmware.py',
                  'wesp_transport.py','receiver_setup.py','receiver_assets.py','manage.py','LICENSE','README.md',
-                 'desktop.py','desktop_bridge.py','preview.py','music.py','scenes.py','first_light.py','effects_config.py','ota_update.py','preset_store.py'):
+                 'desktop.py','desktop_bridge.py','preview.py','music.py','scenes.py','first_light.py','effects_config.py','ota_update.py','preset_store.py','audio_source.py'):
         result[app/name]=((SOURCE/name).read_bytes(),0o644)
     for file in (SOURCE/'app').glob('*.qml'):
         result[app/'app'/file.name]=(file.read_bytes(),0o644)
