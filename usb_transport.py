@@ -295,6 +295,8 @@ class Device:
 
 def serve():
     import control
+    import preview
+    publisher = preview.Publisher(control.RUNTIME / 'frame-preview.json')
     prefs = control.settings()
     configured = prefs.get('controller')
     def selected_device(selected):
@@ -432,8 +434,26 @@ def serve():
                         require_target(command,device)
                         if command['kind']=='state':
                             result=device.state(command.get('payload'))
+                            if result.get('on') is False:
+                                publisher.publish([[0,0,0] for _ in range(device.led_count)],
+                                                  device.expected_mac, source='off', force=True)
                         elif command['kind']=='pixels':
                             result=device.pixels(command['pixels'])
+                            if result is not False and time.monotonic()-publisher.last >= .1:
+                                try:
+                                    import notification_fx
+                                    document=device.document or {}
+                                    state=document.get('state',document)
+                                    current=control.settings()
+                                    memory=control.runtime()
+                                    source=('volume' if memory.get('volumeUntil',0)>time.time() else
+                                            'notification' if notification_fx.active(current,memory,time.time()) else
+                                            'music' if current.get('equalizer') else
+                                            'desktop' if current.get('kde') else 'manual')
+                                    publisher.publish(command['pixels'],device.expected_mac,
+                                                      brightness=state.get('bri',255),source=source)
+                                except (OSError,ValueError,KeyError,TypeError):
+                                    LOG.debug('Preview metadata unavailable',exc_info=True)
                         elif command['kind']=='link':
                             result=device.link_status()
                         elif command['kind']=='baud':

@@ -27,6 +27,12 @@ def main():
         r'i18nd\("'+re.escape(DOMAIN)+r'",\s*("(?:\\.|[^"\\])*")',qml))
     if re.search('[А-Яа-яЁё]',qml):
         raise ValueError('Untranslated Russian text in QML source')
+    for path in (ROOT/'app').glob('*.qml'):
+        source=path.read_text()
+        messages.update(json.loads(match[1]) for match in re.finditer(
+            r'root\.t\(\s*("(?:\\.|[^"\\])*")',source))
+        if re.search('[А-Яа-яЁё]',source):
+            raise ValueError('Untranslated Russian text in app QML source')
     with tempfile.TemporaryDirectory(prefix='wled-catalog-') as directory:
         for source in sorted((ROOT/'locale').glob('*.po')):
             target=Path(directory)/(source.stem+'.mo')

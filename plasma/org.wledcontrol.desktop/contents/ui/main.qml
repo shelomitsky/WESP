@@ -475,6 +475,11 @@ PlasmoidItem {
             QQC2.Label { text: i18nd("plasma_applet_org.wledcontrol.desktop", "Active notifications: %1", root.notifications); Layout.fillWidth: true }
             QQC2.ToolButton { text: i18nd("plasma_applet_org.wledcontrol.desktop", "Clear"); onClicked: root.request(["clear"]) }
         }
+        QQC2.Button {
+            text: i18nd("plasma_applet_org.wledcontrol.desktop", "Open WESP")
+            Layout.fillWidth: true
+            onClicked: root.request(["desktop-open"])
+        }
         QQC2.ToolButton {
             Layout.fillWidth: true
             text: checked ? i18nd("plasma_applet_org.wledcontrol.desktop", "Back to controls") : i18nd("plasma_applet_org.wledcontrol.desktop", "Configure lighting…")

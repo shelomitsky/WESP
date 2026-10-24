@@ -58,6 +58,9 @@ class InstallTest(unittest.TestCase):
         manage.install(start=False)
         self.assertTrue((self.root/'.local/bin/wled-control').is_file())
         self.assertTrue((self.root/'data/wled-control/layout.py').is_file())
+        self.assertTrue((self.root/'data/wled-control/app/Main.qml').is_file())
+        self.assertTrue((self.root/'.local/bin/wesp').is_file())
+        self.assertTrue((self.root/'data/applications/wesp.desktop').is_file())
         self.assertEqual(len(list((self.root/'config/systemd/user').glob('wled-control-*.service'))),6)
         config=self.root/'config/wled-control-desktop/settings.json'
         config.parent.mkdir(parents=True)
@@ -65,6 +68,7 @@ class InstallTest(unittest.TestCase):
         manage.remove(start=False)
         self.assertEqual(json.loads(config.read_text())['equalizer_decay_ms'],350)
         self.assertFalse((self.root/'.local/bin/wled-control').exists())
+        self.assertFalse((self.root/'data/applications/wesp.desktop').exists())
 
     def test_upgrade_rollback_and_edit_guard(self):
         manage.install(start=False)

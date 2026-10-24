@@ -1,3 +1,15 @@
+# 0.2.0-alpha.8 (candidate)
+
+- Add a standalone PySide6/Qt Quick application, application-menu entry and
+  single-window activation from the optional Plasma remote.
+- Add a transport-free desktop-audio demo with isolated temporary tuning.
+- Preview real host RGB frames exported by the existing device owner, including
+  explicit Off; retain the single USB/Wi-Fi owner and firmware protocol.
+- Include GUI assets in transactional installation, rollback and source archives;
+  add actual standalone Qt controls and demo-isolation checks.
+- Preserve existing music, section, notification and receiver setup behavior.
+  New scenes/Pulse and guided calibration remain separate future milestones.
+
 # 0.2.0-alpha.7 (candidate)
 
 - Add a separate WESP receiver firmware with USB setup, Wi-Fi control, configured

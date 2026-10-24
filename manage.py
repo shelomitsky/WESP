@@ -49,6 +49,13 @@ def systemctl(*args,check=True):
 
 def doctor():
     missing=[name for name in ('numpy','serial','dbus','gi','PIL') if importlib.util.find_spec(name) is None]
+    if importlib.util.find_spec('PySide6') is None:
+        runtime=paths()['data']/'wled-control-tools/desktop-qt6/bin/python'
+        try:
+            subprocess.run([str(runtime),'-c','from PySide6.QtQuick import QQuickWindow'],
+                           check=True,capture_output=True,timeout=8)
+        except (OSError,subprocess.SubprocessError):
+            missing.append('PySide6 (standalone GUI)')
     missing += [name for name in ('parec','wpctl','systemctl','plasmashell') if not shutil.which(name)]
     if not missing:
         try:
@@ -64,8 +71,11 @@ def payloads():
     result={}
     for name in ('control.py','equalizer.py','usb_transport.py','usb_probe.py','events.py',
                  'layout.py','notification_fx.py','wallpaper.py','i18n.py','services.py','firmware.py',
-                 'wesp_transport.py','receiver_setup.py','receiver_assets.py','manage.py','LICENSE','README.md'):
+                 'wesp_transport.py','receiver_setup.py','receiver_assets.py','manage.py','LICENSE','README.md',
+                 'desktop.py','desktop_bridge.py','preview.py'):
         result[app/name]=((SOURCE/name).read_bytes(),0o644)
+    for file in (SOURCE/'app').glob('*.qml'):
+        result[app/'app'/file.name]=(file.read_bytes(),0o644)
     if (SOURCE/'receiver-firmware/manifest.json').exists():
         import receiver_assets
         receiver_assets.validated(SOURCE/'receiver-firmware')
@@ -84,9 +94,14 @@ def payloads():
             relative=file.relative_to(SOURCE/'plasma'/widget)
             result[p['data']/'plasma/plasmoids'/widget/relative]=(file.read_bytes(),0o644)
             result[app/'plasma'/widget/relative]=(file.read_bytes(),0o644)
-    for launcher,module in (('wled-control','control.py'),('wled-control-service','services.py')):
+    for launcher,module in (('wled-control','control.py'),('wled-control-service','services.py'),('wesp','desktop.py')):
         text='#!/usr/bin/python3\nimport os,sys\nos.execv(sys.executable,[sys.executable,'+repr(str(app/module))+',*sys.argv[1:]])\n'
         result[p['home']/'.local/bin'/launcher]=(text.encode(),0o755)
+    executable=str(app/'desktop.py').replace('%','%%')
+    executable=executable.replace('\\','\\\\').replace('"','\\"').replace('`','\\`').replace('$','\\$')
+    executable=executable.replace('\\','\\\\')
+    entry='[Desktop Entry]\nType=Application\nName=WESP\nComment=Desktop ambient lighting\nExec=/usr/bin/python3 "'+executable+'"\nIcon=wled-control\nTerminal=false\nCategories=Utility;Settings;\n'
+    result[p['data']/'applications/wesp.desktop']=(entry.encode(),0o644)
     for name,mode in MODES.items():
         text='[Unit]\nDescription=WESP '+name+'\nAfter=graphical-session.target\nPartOf=graphical-session.target\n'
         if name != 'usb':

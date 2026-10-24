@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""Actual standalone Qt window and controls, isolated from devices and user state."""
+import os
+os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+import json
+from pathlib import Path
+import tempfile
+import time
+import unittest
+from unittest.mock import patch
+
+from PySide6.QtCore import QMetaObject, QObject
+from PySide6.QtGui import QGuiApplication
+
+
+class DesktopWindowTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QGuiApplication.instance() or QGuiApplication([])
+
+    def test_real_window_edits_demo_without_a_device_command(self):
+        import control
+        import desktop
+        import desktop_bridge
+        with tempfile.TemporaryDirectory() as folder, \
+             patch.object(control, 'CONFIG', Path(folder)), \
+             patch.object(control, 'RUNTIME', Path(folder) / 'runtime'), \
+             patch.object(desktop_bridge.DeviceBackend, 'command', side_effect=AssertionError('device command')):
+            model = desktop_bridge.DesktopModel()
+            model.set_demo(True, capture=False)
+            engine, bridge = desktop.create_window(model, demo_capture=False)
+            self.addCleanup(bridge.close)
+            roots = engine.rootObjects()
+            self.assertEqual(len(roots), 1, 'standalone ApplicationWindow must load')
+            window = roots[0]
+            self.assertGreaterEqual(window.property('width'), 900)
+            self.assertTrue(hasattr(window, 'grabWindow'), 'load the actual Qt Quick window wrapper')
+            switch = window.findChild(QObject, 'powerSwitch')
+            self.assertIsNotNone(switch)
+            self.assertTrue(switch.property('checked'))
+            QMetaObject.invokeMethod(switch, 'click')
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline and model.demo.on:
+                self.app.processEvents()
+                time.sleep(.01)
+            self.assertFalse(model.demo.on)
+            self.assertFalse((Path(folder) / 'settings.json').exists())
+            window.close()
+
+    def test_polling_keeps_unsaved_receiver_fields_and_configure_clears_password(self):
+        import desktop
+        import desktop_bridge
+        class Model:
+            demo = None
+            def poll(self):
+                return dict(target='device',configured=True,online=True,
+                    settings={'controller':{'mac':'aabbccddeeff'}}, state={'on':False,'bri':100},
+                    sections=[],ports=[],firmware={},receiver=dict(mac='aabbccddeeff',
+                    outputs=[dict(gpio=2,count=10,order='GRB')],max_milliamps=500))
+            def close(self):
+                pass
+        model = Model()
+        engine, bridge = desktop.create_window(model)
+        self.addCleanup(bridge.close)
+        bridge.timer.stop()
+        window = engine.rootObjects()[0]
+        bridge.receive(dict(action='poll',ok=True,data=model.poll()))
+        self.app.processEvents()
+        field = window.findChild(QObject,'wifiPassword')
+        field.setProperty('text','fixture-password')
+        window.setProperty('wifiDirty',True)
+        window.setProperty('currentBudget',900)
+        window.setProperty('outputsDirty',True)
+        bridge.receive(dict(action='poll',ok=True,data=model.poll()))
+        bridge.completed.emit('setup-status',True)
+        self.app.processEvents()
+        self.assertEqual(field.property('text'),'fixture-password')
+        self.assertEqual(window.property('currentBudget'),900)
+        bridge.completed.emit('setup-configure',True)
+        self.app.processEvents()
+        self.assertEqual(field.property('text'),'')
+        window.close()
+
+    def test_second_launch_activates_the_existing_window(self):
+        import control
+        import desktop
+        with tempfile.TemporaryDirectory(prefix='wesp-win-') as folder, \
+             patch.object(control,'RUNTIME',Path(folder)):
+            first=desktop.SingleWindow()
+            self.assertTrue(first.acquire())
+            from PySide6.QtQuick import QQuickWindow
+            window=QQuickWindow()
+            first.activate(window)
+            second=desktop.SingleWindow()
+            self.assertFalse(second.acquire())
+            deadline=time.monotonic()+2
+            while time.monotonic()<deadline and not window.isVisible():
+                self.app.processEvents()
+                time.sleep(.01)
+            self.assertTrue(window.isVisible())
+            window.close()
+            first.server.close()
+            first.lock.unlock()
+
+
+if __name__ == '__main__':
+    unittest.main()

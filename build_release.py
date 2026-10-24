@@ -14,7 +14,8 @@ def build(directory=None,receiver=None):
     if verify_release.main():
         raise ValueError('Source checks failed')
     files=list(root.glob('*.py'))+list(root.glob('*.md'))
-    files += [root/'LICENSE',root/'requirements.txt',root/'.gitignore']
+    files += [root/'LICENSE',root/'requirements.txt',root/'requirements-gui.txt',root/'.gitignore']
+    files += list((root/'app').glob('*.qml'))
     files += list((root/'tests').glob('*.py'))+list((root/'tests').glob('*.js'))
     files += [p for p in (root/'plasma').rglob('*') if p.is_file()]
     files += list((root/'.github/workflows').glob('*.yml'))

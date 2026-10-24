@@ -582,6 +582,12 @@ def execute(args):
 
 
 def dispatch(args):
+    if args==['desktop-open']:
+        import subprocess
+        subprocess.Popen(['/usr/bin/python3',str(Path(__file__).with_name('desktop.py'))],
+                         stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL,start_new_session=True)
+        return dict(ok=True)
     if args[:1]==['firmware-native-ready']:
         import firmware
         root=firmware.state_root()

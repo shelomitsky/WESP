@@ -1,7 +1,25 @@
 # Release candidate acceptance
 
-Product: WESP. Version: 0.2.0-alpha.7. Author: Chapman. License: MIT.
+Product: WESP. Version: 0.2.0-alpha.8. Author: Chapman. License: MIT.
 The first alpha targets KDE Plasma 6; the product name is desktop-independent.
+
+## Standalone application — alpha.8
+
+- [x] Actual Qt Quick window loads; demo power control edits the isolated demo,
+  with physical RPCs rejected by the test boundary.
+- [x] Demo analysis and tuning reuse existing DSP/rendering without writing saved
+  settings, selecting a controller or opening USB/TCP.
+- [x] Real multi-process owner exports the transmitted host frame; Off exports
+  black. Preview is bounded/private and never a delivery/current measurement.
+- [x] App QML, modules, launcher and desktop entry participate in cold install/
+  uninstall; source archives include the GUI and pinned dependency file.
+- [ ] Real application-menu activation and repeated launch on the owner's session.
+- [ ] Real setup edits/save and Wi-Fi switching from the new window.
+- [ ] Hardware and demo toggling while a real music session continues unchanged.
+- [ ] Visible language/theme/layout acceptance of all application pages.
+
+New musical scenes/Pulse, guided first-light and spatial wallpapers are future
+milestones, not claimed implemented by moving the existing controls to a window.
 
 ## Implemented and automated
 

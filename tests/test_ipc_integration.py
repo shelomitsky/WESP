@@ -81,6 +81,19 @@ def serve_test_peer():
 
 
 class IPCIntegrationTest(unittest.TestCase):
+    def test_preview_exports_the_sent_frame_and_off_through_the_real_owner(self):
+        process = self.start_service()
+        self.wait_ready(process)
+        result = self.client('usb.client(pixels=[[11,22,33],[44,55,66]])')
+        self.assertTrue(result['ok'])
+        path = self.base / 'runtime/app/frame-preview.json'
+        self.assertTrue(path.exists(), 'the real sender must export its actual frame')
+        record = json.loads(path.read_text())
+        self.assertEqual(record['pixels'], [[11,22,33],[44,55,66]])
+        self.assertEqual(record['mac'], MAC)
+        self.assertTrue(self.client("usb.client({'on':False})")['ok'])
+        self.assertEqual(json.loads(path.read_text())['pixels'], [[0,0,0],[0,0,0]])
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='wled-ipc-')
         self.addCleanup(temporary.cleanup)

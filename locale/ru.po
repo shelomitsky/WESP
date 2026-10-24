@@ -650,3 +650,156 @@ msgstr "Копия не совпадает с памятью контролле�
 
 msgid "Saving at a compatible USB speed: %1%. This may take about ten minutes."
 msgstr "Сохранение на совместимой скорости USB: %1%. Это может занять около десяти минут."
+
+msgid "Arrange your physical LED ranges and their directions."
+msgstr "Укажите участки лент и направление их подключения."
+
+msgid "Back to my device"
+msgstr "Вернуться к устройству"
+
+msgid "Calculated colors; actual delivery and power limits are separate."
+msgstr "Рассчитанные цвета. Доставка кадров и лимит питания проверяются отдельно."
+
+msgid "Clear signals"
+msgstr "Сбросить сигналы"
+
+msgid "Color"
+msgstr "Цвет"
+
+msgid "Connect an ESP or try the demo"
+msgstr "Подключите ESP или попробуйте деморежим"
+
+msgid "Connected over USB"
+msgstr "Подключено по USB"
+
+msgid "Connected over Wi-Fi"
+msgstr "Подключено по Wi-Fi"
+
+msgid "Connection"
+msgstr "Подключение"
+
+msgid "Custom"
+msgstr "Другое"
+
+msgid "Demo · desktop audio · no ESP commands"
+msgstr "Деморежим · звук компьютера · без команд ESP"
+
+msgid "Demo — your device is unchanged"
+msgstr "Деморежим — устройство работает как прежде"
+
+msgid "Desktop audio unavailable — retrying"
+msgstr "Звук компьютера недоступен — повторяем подключение"
+
+msgid "Desktop color"
+msgstr "Цвет рабочего стола"
+
+msgid "Desktop lighting"
+msgstr "Подсветка рабочего стола"
+
+msgid "Device and firmware"
+msgstr "Устройство и прошивка"
+
+msgid "Device unavailable"
+msgstr "Устройство недоступно"
+
+msgid "Finish installation"
+msgstr "Завершить установку"
+
+msgid "Host frame preview"
+msgstr "Предпросмотр рассчитанных кадров"
+
+msgid "Install firmware"
+msgstr "Установить прошивку"
+
+msgid "Install on a new ESP"
+msgstr "Установка на новую ESP"
+
+msgid "Leave demo mode to configure your device"
+msgstr "Выйдите из деморежима для настройки устройства"
+
+msgid "Listening to the computer output. No microphone or device connection."
+msgstr "Используется звук компьютера. Микрофон и ESP не подключаются."
+
+msgid "Live demo"
+msgstr "Демонстрация"
+
+msgid "Marker pixel"
+msgstr "Один светодиод"
+
+msgid "Music is enabled"
+msgstr "Музыкальная подсветка включена"
+
+msgid "Music level"
+msgstr "Музыкальная шкала"
+
+msgid "New strip"
+msgstr "Новая лента"
+
+msgid "No recent frame — start music lighting to see the preview."
+msgstr "Свежих кадров нет — включите музыкальную подсветку для предпросмотра."
+
+msgid "Notification signals"
+msgstr "Сигналы уведомлений"
+
+msgid "Overview"
+msgstr "Обзор"
+
+msgid "Palette"
+msgstr "Палитра"
+
+msgid "Prepare WESP firmware"
+msgstr "Подготовить прошивку WESP"
+
+msgid "Prepare WLED firmware"
+msgstr "Подготовить прошивку WLED"
+
+msgid "Preview signal"
+msgstr "Проверить сигнал"
+
+msgid "React to desktop music"
+msgstr "Реагировать на музыку компьютера"
+
+msgid "Remove"
+msgstr "Удалить"
+
+msgid "Retry"
+msgstr "Повторить"
+
+msgid "Silence — play audio on your computer"
+msgstr "Тишина — включите музыку на компьютере"
+
+msgid "The WESP window is starting. Try again shortly."
+msgstr "Окно WESP запускается. Повторите через несколько секунд."
+
+msgid "The command could not be completed"
+msgstr "Не удалось выполнить команду"
+
+msgid "Tint"
+msgstr "Цветовой оттенок"
+
+msgid "Try without an ESP"
+msgstr "Попробовать без ESP"
+
+msgid "Unsupported application command"
+msgstr "Неподдерживаемая команда приложения"
+
+msgid "Wait for the current operation to finish"
+msgstr "Дождитесь завершения текущего действия"
+
+msgid "Waiting for desktop audio"
+msgstr "Ожидание звука компьютера"
+
+msgid "Wi-Fi connected"
+msgstr "Wi-Fi подключён"
+
+msgid "Your desktop, in light"
+msgstr "Свет вашего рабочего места"
+
+msgid "Your lighting"
+msgstr "Ваша подсветка"
+
+msgid "Your strips will appear here. Open Connection to set up your ESP, or try without one."
+msgstr "Здесь появятся ваши ленты. Настройте ESP в разделе «Подключение» или попробуйте без неё."
+
+msgid "Open WESP"
+msgstr "Открыть WESP"

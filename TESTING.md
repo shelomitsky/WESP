@@ -1,5 +1,14 @@
 # Verification record
 
+## Standalone application
+
+`python3 check_qml_desktop.py -v` uses PySide6 6.10.2 with the real ApplicationWindow,
+temporary config/runtime and a device-command rejection boundary. Install
+`requirements-gui.txt` in the test environment. The normal release gate stays
+Qt-independent; `.github/workflows/checks.yml` has a separate Qt desktop job.
+`tests/test_preview.py`, `test_desktop_bridge.py` and the real IPC export scenario
+check isolation, private/stale previews, shell-free commands and actual owner frames.
+
 ## Independent review fixes — 2026-10-23
 
 Two independent AI review contexts reviewed installer and controller handoff

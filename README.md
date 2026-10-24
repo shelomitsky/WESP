@@ -11,13 +11,50 @@ Author: **Chapman**. Licensed under MIT. Please credit Chapman when sharing
 screenshots, builds or articles about this project; retain the copyright and
 license notices when distributing its code.
 
-**0.2.0-alpha.7: local release candidate.** Generalized device/layout support and
+**0.2.0-alpha.8: local release candidate.** Includes an experimental standalone
+Qt application and transport-free music demo. Generalized device/layout support and
 the new installer have automated checks. A fresh KDE session and physical LEDs
 still need acceptance before a public release. This candidate does not replace
 an existing installation automatically and has not been published.
 
 [Русский быстрый старт](QUICKSTART.ru.md) · [Changes](CHANGELOG.md) ·
 [Verification and remaining acceptance](RELEASE_CHECKLIST.md)
+
+## Standalone application
+
+Open **WESP** from the application menu, or run `wesp` after installation.
+The window contains the live strip preview, music tuning, signals, section
+editor and the existing firmware/receiver setup. The Plasma widget remains an
+optional quick remote; **Open WESP** activates the same single application window.
+Closing the window leaves the desktop services running.
+
+**Try without an ESP** listens to the computer's audio output and uses the same
+music analysis and section renderer. Its power, brightness and tuning are
+temporary and isolated from a real controller, including one already running.
+It never opens a device or changes the saved controller, network or pairing.
+The demo ends when the window closes. There is no microphone or screen capture.
+
+Device preview shows the latest host RGB frame and its age, separately from
+connection state. It is not an optical/current measurement. Initial standalone
+support is still Linux/KDE Plasma 6; moving the UI out of Plasma does not make
+the KDE integrations available on other desktops automatically.
+
+The GUI requires PySide6/Qt Quick in addition to the service dependencies below.
+Use your distribution's PySide6 QtCore/QtGui/QtQml/QtQuick/QtQuickControls2/QtNetwork
+packages, or a private user environment:
+
+```sh
+python3 -m venv --system-site-packages "${XDG_DATA_HOME:-$HOME/.local/share}/wled-control-tools/desktop-qt6"
+"${XDG_DATA_HOME:-$HOME/.local/share}/wled-control-tools/desktop-qt6/bin/python" -m pip install -r requirements-gui.txt
+python3 manage.py doctor
+python3 manage.py install
+```
+
+The launcher automatically uses that private GUI interpreter when system Python
+does not provide PySide6. The service interpreter remains `/usr/bin/python3`.
+PySide6 is a separate upstream dependency; WESP's MIT license covers its own code.
+No package manager or elevated privileges are invoked by the application itself.
+New musical scenes and guided strip calibration remain later milestones.
 
 ## Features
 
