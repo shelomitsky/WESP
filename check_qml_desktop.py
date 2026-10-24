@@ -102,6 +102,36 @@ class DesktopWindowTest(unittest.TestCase):
             first.server.close()
             first.lock.unlock()
 
+    def test_demo_brightness_gesture_cannot_be_delivered_after_leaving_demo(self):
+        import control
+        import desktop
+        import desktop_bridge
+        class Backend:
+            def __init__(self): self.mutations=[]
+            def command(self,args):
+                if args[0]=='status': return dict(ok=True,state={'on':True,'bri':100})
+                if args[0]=='firmware-status': return dict(ok=True,firmware={})
+                self.mutations.append(args)
+                return {'ok':True}
+        prefs={'controller':{'mac':'aabbccddeeff','count':20},'sections':[]}
+        with patch.object(control,'settings',return_value=prefs):
+            backend=Backend();model=desktop_bridge.DesktopModel(backend)
+            model.set_demo(True,capture=False)
+            engine,bridge=desktop.create_window(model,demo_capture=False)
+            self.addCleanup(bridge.close)
+            window=engine.rootObjects()[0]
+            slider=window.findChild(QObject,'brightnessSlider')
+            slider.setProperty('value',200)
+            QMetaObject.invokeMethod(slider,'moved')
+            bridge.setDemo(False)
+            # Also cover a command queued while the old demo is still displayed.
+            bridge.action('brightness',['190'])
+            deadline=time.monotonic()+.5
+            while time.monotonic()<deadline:
+                self.app.processEvents();time.sleep(.01)
+            self.assertEqual(backend.mutations,[],'a demo gesture must never become a physical command')
+            window.close()
+
 
 if __name__ == '__main__':
     unittest.main()

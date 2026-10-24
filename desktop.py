@@ -42,6 +42,7 @@ class AppBridge(QObject):
         self.demo_capture = demo_capture
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='wesp-ui')
         self.queue = deque()
+        self.generation = self.view_generation = 0
         self._busy, self._closed = False, False
         initial = model.poll() if model.demo is not None else dict(
             target='device', configured=False, online=False, settings={},
@@ -76,11 +77,31 @@ class AppBridge(QObject):
     def action(self, action, args):
         if self._closed:
             return
+        if self.view_generation != self.generation:
+            return  # The displayed controls still belong to the previous target.
+        target = self.view_target()
+        self.enqueue(action, args, target)
+
+    def view_target(self):
+        data = json.loads(self._data)
+        return ('demo' if data.get('target') == 'demo' else
+                'device:' + str(((data.get('settings') or {}).get('controller') or {}).get('mac', '')))
+
+    @Property(str, notify=changed)
+    def commandTarget(self):
+        return str(self.view_generation) + ':' + self.view_target()
+
+    @Slot(str, str, 'QVariantList')
+    def actionFor(self, target, action, args):
+        if target == self.commandTarget:
+            self.action(action, args)
+
+    def enqueue(self, action, args, target):
         if len(self.queue) >= 32:
             self._error = tr('Wait for the current operation to finish')
             self.changed.emit()
             return
-        item = (action, list(args))
+        item = (action, list(args), target, self.generation)
         if action == 'brightness' and self.queue and self.queue[-1][0] == action:
             self.queue[-1] = item
         else:
@@ -90,7 +111,9 @@ class AppBridge(QObject):
 
     @Slot(bool)
     def setDemo(self, enabled):
-        self.action('demo', [enabled])
+        self.generation += 1
+        self.queue.clear()
+        self.enqueue('demo', [enabled], None)
 
     @Slot()
     def refresh(self):
@@ -110,7 +133,7 @@ class AppBridge(QObject):
                     self.changed.emit()
                 return
             self.device_ticks = 0
-        action, args = self.queue.popleft() if self.queue else ('poll', [])
+        action, args, target, generation = self.queue.popleft() if self.queue else ('poll', [], None, self.generation)
         self.current_action, self._busy = action, True
         self.busyChanged.emit()
         def work():
@@ -118,9 +141,11 @@ class AppBridge(QObject):
                 if action == 'demo':
                     self.model.set_demo(bool(args[0]), capture=self.demo_capture)
                 elif action != 'poll':
+                    if generation != self.generation or target != self.model.identity():
+                        return dict(action='poll', ok=True, data=self.model.poll(), generation=self.generation)
                     self.model.command(action, args)
                 name = 'setup-' + args[0] if action == 'setup' else action
-                return dict(action=name, ok=True, data=self.model.poll())
+                return dict(action=name, ok=True, data=self.model.poll(), generation=generation)
             except Exception as error:
                 return dict(action=action, ok=False, error=str(error))
         def ready(future):
@@ -133,6 +158,7 @@ class AppBridge(QObject):
         self._busy = False
         if result['ok']:
             self._data = json.dumps(result['data'])
+            self.view_generation = result.get('generation', self.generation)
             if result['action'] != 'poll':
                 self._error = ''
         else:

@@ -13,6 +13,7 @@ ApplicationWindow {
     readonly property var prefs: data.settings || ({})
     readonly property var state: data.state || ({})
     readonly property var sections: data.sections || []
+    readonly property string controlTarget: bridge.commandTarget
     property int page: 0
     property var draftSections: []
     property bool layoutDirty: false
@@ -49,6 +50,7 @@ ApplicationWindow {
         var incoming=data.settings || {};
         var target=data.target+":"+((incoming.controller || {}).mac || "");
         if(editingTarget!==target) {
+            brightnessDelay.stop();
             editingTarget=target; layoutDirty=false; outputsDirty=false;
             wifiDirty=false; ssid.text=""; password.text="";
         }
@@ -115,9 +117,9 @@ ApplicationWindow {
             }
             RowLayout {
                 Label { text:root.t("Brightness") }
-                Slider { id:brightness; objectName:"brightnessSlider"; Layout.fillWidth:true; from:1; to:255; stepSize:1; value:root.state.bri || 128; enabled:root.demo || root.data.online; onMoved:brightnessDelay.restart() }
+                Slider { id:brightness; objectName:"brightnessSlider"; Layout.fillWidth:true; from:1; to:255; stepSize:1; value:root.state.bri || 128; enabled:root.demo || root.data.online; onMoved:{brightnessDelay.target=root.controlTarget;brightnessDelay.amount=Math.round(value);brightnessDelay.restart();} }
                 Label { text:Math.round(brightness.value*100/255)+"%"; Layout.preferredWidth:42 }
-                Timer { id:brightnessDelay; interval:120; onTriggered:bridge.action("brightness",[String(Math.round(brightness.value))]) }
+                Timer { id:brightnessDelay; property string target:""; property int amount:128; interval:120; onTriggered:bridge.actionFor(target,"brightness",[String(amount)]) }
             }
             StackLayout {
                 currentIndex:root.page; Layout.fillWidth:true; Layout.fillHeight:true

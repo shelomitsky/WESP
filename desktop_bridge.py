@@ -128,6 +128,11 @@ class DesktopModel:
         self.receiver = {}
         self.ports = []
 
+    def identity(self):
+        if self.demo is not None:
+            return 'demo'
+        return 'device:' + str((control.settings().get('controller') or {}).get('mac', ''))
+
     def set_demo(self, enabled, capture=True):
         if self.audio:
             self.audio.close()

@@ -8,6 +8,8 @@ temporary config/runtime and a device-command rejection boundary. Install
 Qt-independent; `.github/workflows/checks.yml` has a separate Qt desktop job.
 `tests/test_preview.py`, `test_desktop_bridge.py` and the real IPC export scenario
 check isolation, private/stale previews, shell-free commands and actual owner frames.
+The standalone Qt suite also moves brightness in demo and immediately leaves it;
+target/session-scoped commands prevent the delayed gesture reaching a real device.
 
 ## Independent review fixes — 2026-10-23
 
