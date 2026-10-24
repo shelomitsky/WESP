@@ -69,3 +69,6 @@ class ReceiverCoreTest(unittest.TestCase):
 
     def test_native_ota_transfer_contract(self):
         self.compile_and_run('ota_test.cpp')
+
+    def test_realtime_audio_packet_policy(self):
+        self.compile_and_run('realtime_test.cpp')
