@@ -51,7 +51,8 @@ def build(output: Path, pio: str) -> Path:
     framework = core_dir / "packages/framework-arduinoespressif32@3.20014.231204"
     boot_app = framework / "tools/partitions/boot_app0.bin"
     if not boot_app.exists():
-        boot_app = core_dir / "packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
+        framework = core_dir / "packages/framework-arduinoespressif32"
+        boot_app = framework / "tools/partitions/boot_app0.bin"
     sources = [("bootloader.bin", 0x1000, compiled / "bootloader.bin"),
                ("partitions.bin", 0x8000, compiled / "partitions.bin"),
                ("boot_app0.bin", 0xE000, boot_app),
@@ -68,6 +69,8 @@ def build(output: Path, pio: str) -> Path:
                 "flash_freq": "40m", "platform": "espressif32@6.5.0",
                 "framework": "arduinoespressif32@3.20014.231204", "images": files}
     manifest['elf_sha256']=hashlib.sha256((compiled/'firmware.elf').read_bytes()).hexdigest()
+    import receiver_sources
+    receiver_sources.bundle(framework,assets)
     path = assets / "manifest.json"
     path.write_text(json.dumps(manifest, indent=2) + "\n")
     return path

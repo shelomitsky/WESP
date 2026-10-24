@@ -32,11 +32,17 @@ class ReceiverCoreTest(unittest.TestCase):
                 boot = pathlib.Path(env["PLATFORMIO_CORE_DIR"]) / "packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
                 boot.parent.mkdir(parents=True)
                 boot.write_bytes(b"newly-installed-boot-app")
+                framework=boot.parents[2]
+                (framework/'package.json').write_text(json.dumps({'version':'3.20014.231204'}))
+                for name in ('cores/esp32/core.cpp','libraries/WiFi/wifi.cpp','variants/esp32/pins_arduino.h'):
+                    source=framework/name;source.parent.mkdir(parents=True,exist_ok=True);source.write_text('// library source')
                 return subprocess.CompletedProcess(command, 0)
 
             with mock.patch.object(builder.Path, "home", return_value=home), mock.patch.object(builder.subprocess, "run", side_effect=fake_pio):
                 manifest_path = builder.build(output, "test-pio")
             manifest = json.loads(manifest_path.read_text())
+            self.assertTrue((manifest_path.parent/'arduino-core-sources.tar.gz').is_file())
+            self.assertTrue((manifest_path.parent/'licenses/Arduino-ESP32-LGPL-2.1.txt').is_file())
             self.assertEqual([image["offset"] for image in manifest["images"]],
                              [0x1000, 0x8000, 0xE000, 0x10000])
             for image in manifest["images"]:

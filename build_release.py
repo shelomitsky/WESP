@@ -31,7 +31,9 @@ def build(directory=None,receiver=None):
         import receiver_assets
         receiver=Path(receiver)
         receiver_assets.validated(receiver)
-        for name in ['manifest.json',*receiver_assets.OFFSETS]:
+        import receiver_sources
+        materials=receiver_sources.release_files(receiver)
+        for name in ['manifest.json',*receiver_assets.OFFSETS,*materials]:
             entries['receiver-firmware/'+name]=(receiver/name).read_bytes()
     hashes={name:hashlib.sha256(data).hexdigest() for name,data in entries.items()}
     entries['SOURCE_SHA256.json']=json.dumps(hashes,sort_keys=True,indent=2).encode()+b'\n'

@@ -20,3 +20,9 @@ as MIT by this repository. [Upstream license for that tag](https://raw.githubuse
 NumPy, pyserial, Pillow, Python, Qt/KDE and the system DBus/GI/audio components are
 external dependencies governed by their respective licenses. Installation uses
 the user's system components; their code is not copied into this source archive.
+
+Binary release bundles include upstream license copies in receiver-firmware/licenses/
+and the pinned Arduino library sources with retained notices in
+receiver-firmware/arduino-core-sources.tar.gz. Rebuild instructions are in
+receiver-firmware/REBUILD.md; application source and the pinned build recipe are
+included in the same release. The installer retains the license copies as well.

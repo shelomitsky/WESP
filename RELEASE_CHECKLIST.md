@@ -239,3 +239,8 @@ rendered94 demo frames in3.5s in Russian (92 in an earlier English pass), and
 created no settings/credentials or physical device commands. This is a fresh
 application profile, not a fresh real Plasma login. Tracked history539 paths
 contained no runtime/credential/flash-backup artifacts; package hygiene passes.
+
+Binary-bundle publication review: exact upstream license copies and pinned
+Arduino library sources/rebuild instructions are included and checksum-covered.
+The packaging gate rejects missing materials; a clean PlatformIO install path
+is tested. Final251 tests/full archive lifecycle and native builder PASS.
