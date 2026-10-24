@@ -200,6 +200,17 @@ not accessed. These results do not imply support for every ESP or LED type.
 - [x] Real-pipe capture keeps the newest immutable window while consumer stalls.
 - [x] TCP lock stall does not block UDP send; local socket backpressure drops.
 - [x] Short RMS/clocked repeat/history and sparse same-target GUI preview tests.
-- [ ] Final full release/Qt/native build, independent review and GitHub CI.
-- [ ] OTA to identified ESP; real raw-level traffic, stale/replay/fail-dark tests.
+- [x] Final full release/Qt/native build, independent review and GitHub CI.
+- [x] OTA to identified ESP; real raw-level traffic, stale/replay/fail-dark tests.
 - [ ] Physical beat-latency comparison and user acceptance.
+
+Alpha14 hardware acceptance: OTA0.2.0→0.2.1 completed and trial was confirmed;
+outputs GPIO2/4 (10+10 GRB), presets and the current800mA setting were retained.
+Fresh authenticated UDP rendered all20 pixels. Modified HMAC, replay,250ms-old
+and200ms-future packets did not renew the source lease; expiry darkened output.
+A414-byte single TCP write containing hardware configure+On revoked the old
+audio grant; a new grant recovered, and explicit Off rejected old signed input.
+On quiet12s desktop-output observations,29–30 audio packets and zero RGB frames
+were sent, with no producer send failures. The source sample was at most10.7ms
+old when sent. Receiver clock estimates and paint counters are diagnostics,
+not acoustic-to-light measurements. Physical beat alignment awaits user acceptance.
