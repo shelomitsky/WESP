@@ -68,6 +68,27 @@ class RealtimeCaptureTest(unittest.TestCase):
                 self.assertTrue(np.allclose(values[-480:],.37))
             finally:recorder.close();os.close(write)
 
+    def test_shared_capture_can_label_an_isolated_demo_stream(self):
+        import realtime_capture as capture
+        read,write=os.pipe();stream=os.fdopen(read,'rb',buffering=0);started=threading.Event()
+        class Process:
+            stdout=stream
+            def terminate(self):pass
+            def wait(self,timeout=None):return 0
+        def spawn(*args,**kwargs):started.set();return Process()
+        with patch.object(capture,'OutputMonitor',return_value=SimpleNamespace(source='test.monitor',close=lambda:None)),patch.object(capture.subprocess,'Popen',side_effect=spawn) as opened:
+            recorder=None
+            try:
+                recorder=capture.LatestCapture(client='WESP Preview')
+                self.assertTrue(started.wait(1))
+                self.assertIn('--client-name=WESP Preview',opened.call_args.args[0])
+                self.assertIn('--property=node.virtual=true',opened.call_args.args[0])
+                self.assertIn('--property=stream.monitor=true',opened.call_args.args[0])
+            finally:
+                if recorder:recorder.close()
+                else:stream.close()
+                os.close(write)
+
     def test_fast_rms_observes_ten_millisecond_attack(self):
         import equalizer
         source=equalizer.AudioFeatures();samples=np.zeros(2048)

@@ -87,6 +87,46 @@ Item { id:root
 '''
 
 
+class WidgetInstallerTest(unittest.TestCase):
+    def test_legacy_prepared_job_can_cancel_and_enable_native_preparation(self):
+        app=QGuiApplication.instance() or QGuiApplication([])
+        source=(Path(__file__).parent/'plasma/org.wledcontrol.desktop/contents/ui/main.qml').read_text()
+        label=source.index('"Install WESP firmware (USB + Wi-Fi)"')
+        a=source.rfind('                QQC2.Button {',0,label);b=source.index('                QQC2.Button {',label)
+        prepare=source[a:b].replace('QQC2.Button {','QQC2.Button { id:prepare;',1)
+        label=source.index('"Install WESP"',source.index('"Replace the firmware and erase all settings'))
+        a=source.rfind('                RowLayout {',0,label);b=source.index('                QQC2.Label {',label)
+        row=source[a:b].replace('QQC2.Button {','QQC2.Button { id:install;',1)
+        c=row.index('QQC2.Button {',row.index('id:install;')+1)
+        row=row[:c]+row[c:].replace('QQC2.Button {','QQC2.Button { id:cancel;',1)
+        qml='''import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls as QQC2
+Item { id:root
+    property var firmwareJob: ({stage:"prepared",token:"legacy"})
+    property bool firmwareBusy:false
+    property bool busy:false
+    property bool firmwareConfirmed:false
+    property string selectedPort:"/dev/ttyUSB0"
+    property var requested: []
+    function i18nd(domain,message) { return message; }
+    function request(args) { requested=args; }
+'''+prepare+row+'function buttons() { return [prepare.enabled,install.visible,cancel.visible]; } function cancelJob() { cancel.clicked(); } }\n'
+        engine=QQmlEngine();component=QQmlComponent(engine);component.setData(qml.encode(),QUrl('file:///installer.qml'))
+        root=component.create();self.assertIsNotNone(root,[e.toString() for e in component.errors()])
+        def evaluate(code):
+            expression=QQmlExpression(engine.rootContext(),root,code);value=expression.evaluate()[0]
+            self.assertFalse(expression.hasError(),expression.error().toString());return value
+        self.assertFalse(evaluate('buttons()[0]'))
+        self.assertFalse(evaluate('buttons()[1]'))
+        self.assertTrue(evaluate('buttons()[2]'))
+        evaluate('cancelJob()')
+        self.assertEqual(evaluate('requested[0]'),'firmware-cancel')
+        root.setProperty('firmwareJob',{'stage':'cancelled','flavor':'wesp'})
+        self.assertTrue(evaluate('buttons()[0]'))
+        root=None;component=None;engine=None
+
+
 class QmlSetupTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

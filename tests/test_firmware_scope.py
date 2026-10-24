@@ -27,6 +27,16 @@ class NativeOnlyInstallerTest(unittest.TestCase):
                 with self.assertRaises(ValueError):firmware.launch('install')
             self.assertEqual(firmware.read_job(root)['stage'],'prepared')
 
+    def test_non_native_install_rejects_before_recovery_side_effects(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            old=dict(stage='prepared',token='test',active=['wled-control-usb.service'],recovery_pending=True)
+            firmware.save_job(root,old)
+            with patch.object(firmware,'state_root',return_value=root),patch.object(firmware,'systemctl') as service:
+                with self.assertRaises(ValueError):firmware.start('install','test')
+            service.assert_not_called()
+            self.assertEqual(firmware.read_job(root),old)
+
     def test_native_prepare_uses_verified_bundled_assets_without_download(self):
         import receiver_assets
         with tempfile.TemporaryDirectory() as folder:

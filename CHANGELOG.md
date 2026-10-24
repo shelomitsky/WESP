@@ -4,6 +4,8 @@
 
 - Removed downloading and installing official WLED firmware. Existing WLED USB
   controllers remain supported; the built-in flasher installs only WESP.
+- Demo and native music now share one continuous output-capture implementation,
+  including source switching, latest-window freshness and process cleanup.
 - Old WLED preparation/connection commands and persisted non-WESP flash jobs
   reject before device access. Backup, identity and recovery guards are retained.
 

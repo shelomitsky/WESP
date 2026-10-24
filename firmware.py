@@ -142,6 +142,9 @@ def start(action, value):
     if action not in ('prepare-native','install','cancel'):
         raise ValueError(tr('Unknown command'))
     root=state_root()
+    if action=='install':
+        with job_lock(root):
+            require_native_job(read_job(root),'install')
     status()
     with job_lock(root):
         data=read_job(root)

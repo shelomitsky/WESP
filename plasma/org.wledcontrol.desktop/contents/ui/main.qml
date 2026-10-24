@@ -804,8 +804,9 @@ PlasmoidItem {
                     onClicked: root.firmwareConfirmed = checked
                 }
                 RowLayout {
-                    visible: root.firmwareJob.stage === "prepared" && root.firmwareJob.flavor === "wesp"
+                    visible: root.firmwareJob.stage === "prepared"
                     QQC2.Button {
+                        visible: root.firmwareJob.flavor === "wesp"
                         text: i18nd("plasma_applet_org.wledcontrol.desktop", "Install WESP")
                         enabled: root.firmwareConfirmed && !root.busy
                         onClicked: root.request(["firmware-install", root.firmwareJob.token])

@@ -314,38 +314,31 @@ class CaptureContinuityTest(unittest.TestCase):
 
 
 class DemoCaptureContinuityTest(unittest.TestCase):
-    def test_demo_does_not_recreate_healthy_audio_after_fifteen_seconds(self):
-        import desktop_bridge,threading
+    def test_demo_reuses_one_continuous_capture_across_long_rendering_gaps(self):
+        import desktop_bridge
         from types import SimpleNamespace
-        clock=Clock();stop=threading.Event();frames=[]
+        from unittest.mock import Mock
+        class Stop:
+            value=False
+            def is_set(self):return self.value
+            def set(self):self.value=True
+            def wait(self,timeout):clock.now+=1;return self.value
+        clock=Clock();stop=Stop();frames=[]
         demo=desktop_bridge.DemoAudio.__new__(desktop_bridge.DemoAudio);demo.stop=stop
         def process(samples):
             frames.append(clock.now)
             if len(frames)==33:stop.set()
             return {}
         demo.session=SimpleNamespace(process=process)
-        class Stream:
-            def fileno(self):return 99
-            def close(self):pass
-        class Capture:
-            stdout=Stream()
-            def terminate(self):pass
-            def wait(self,timeout=None):return 0
-        class Selector:
-            def __enter__(self):return self
-            def __exit__(self,*args):pass
-            def register(self,*args):pass
-            def select(self,timeout):clock.now+=1;return [(None,None)]
-        tone=np.zeros(2048,dtype='<f4').tobytes()
-        with patch.object(desktop_bridge,'OutputMonitor',create=True,return_value=SimpleNamespace(source='@DEFAULT_MONITOR@',close=lambda:None)), \
+        shared=SimpleNamespace(window=SimpleNamespace(snapshot=lambda:(np.zeros(2048),1)),close=Mock())
+        with patch.object(desktop_bridge,'LatestCapture',create=True,return_value=shared) as capture, \
+             patch.object(desktop_bridge,'OutputMonitor',create=True,return_value=SimpleNamespace(source='@DEFAULT_MONITOR@',close=lambda:None)), \
              patch.object(desktop_bridge.time,'monotonic',side_effect=clock.monotonic), \
-             patch.object(desktop_bridge.selectors,'DefaultSelector',Selector), \
-             patch.object(os,'set_blocking'),patch.object(os,'read',return_value=tone), \
-             patch.object(desktop_bridge.subprocess,'Popen',return_value=Capture()) as spawn:
+             patch.object(desktop_bridge.subprocess,'Popen',side_effect=AssertionError('demo opened a second capture')) as spawn:
             demo.run()
-        self.assertEqual(spawn.call_count,1)
-        self.assertIn('--property=node.virtual=true',spawn.call_args.args[0])
-        self.assertIn('--property=stream.monitor=true',spawn.call_args.args[0])
+        capture.assert_called_once_with(client='WESP Preview')
+        spawn.assert_not_called();shared.close.assert_called_once()
+        self.assertGreater(frames[-1],15)
 
 
 class FastModeSelectionTest(unittest.TestCase):
