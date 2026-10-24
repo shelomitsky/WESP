@@ -99,6 +99,29 @@ class TransportTests(unittest.TestCase):
         self.assertFalse(device.send_realtime(MAC,2,rt.now_ns(),22000,4000))
         self.assertNotIn(key.hex(),json.dumps(device.document))
 
+    def test_hardware_configure_then_on_reopens_audio_without_owner_poll(self):
+        stored={'outputs':[dict(gpio=2,count=2,order='GRB')],'max_milliamps':500}
+        def respond(request,reply):
+            reply['capabilities']={'native_effects':True,'realtime_audio':True,'wifi_configure':True}
+            if request['op']=='effects_configure':stored['effects']=request['effects']
+            if request['op']=='configure':stored.update(outputs=request['outputs'],max_milliamps=request['max_milliamps'])
+            if request['op']=='hello':reply.update(stored)
+            if request['op']=='audio_open':reply['audio_stream']=dict(id='12'*8,key='34'*32,port=19448,clock_ms=1000)
+        device,peer=self.device(respond);device.query({'on':True})
+        self.assertTrue(device.prepare_realtime(self.fx_config()))
+        peer.requests.clear()
+        device.configure([dict(gpio=4,count=2,order='GRB')],700)
+        device.query({'on':True})
+        self.assertTrue(device.prepare_realtime(self.fx_config()))
+        self.assertEqual(sum(r['op']=='audio_open' for r in peer.requests),1)
+
+    def test_realtime_stats_keep_only_numeric_public_fields(self):
+        def respond(request,reply):reply['audio_stats']={'received':7,'age_ms':-2,'key':TOKEN,'nested':{'secret':TOKEN}}
+        device,_=self.device(respond)
+        info=device.setup_status()
+        self.assertEqual(info['audio_stats'],{'received':7,'age_ms':-2})
+        self.assertNotIn(TOKEN,json.dumps(device.document))
+
     def test_native_audio_sends_raw_features_and_config_once_without_rgb_frames(self):
         device,peer=self.effects_peer();device.query({'on':True})
         peer.requests.clear()

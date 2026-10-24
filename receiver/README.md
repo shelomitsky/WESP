@@ -183,3 +183,19 @@ checks MAC, ELF build identity/version and unchanged outputs/effects first. A
 failed/unconfirmed boot reverts to the previous slot. This mechanism still needs
 physical validation against the actual installed bootloader for each supported
 upgrade path; successful policy tests are not evidence of physical rollback.
+
+## Real-time audio extension — native0.2.1
+
+After pairing, TCP audio_open(revision) returns a RAM-only streamid/key, UDP19448
+and receiver clock. audio_clock returns a small clock response; neither operation
+renews lighting. Host accepts sync RTT<=80ms, refreshes5s, expires10s.
+UDP40 bytes, big endian: WSA1(4),id(8),sequence(4),sampleMillis(4),RMS(2),bass(2),
+HMAC-SHA256/128(16). Levels use unsigned0..65535. Require active authenticated TCP
+peer, current CFG/session, increasing sequence and estimated age[-40,80]ms;
+40ms clock-sync uncertainty bounds intended real age120ms. Off/config/scene/OTA/
+disconnect revoke grants. No per-audio ACK, JSON parsing or NVS writes. Receive
+batches render only the newest accepted input. Music loss lease stays1200ms;
+rendering/repeats/history run locally at10ms. Station power-save is disabled.
+The existing paired control transport remains unencrypted; this extension uses
+RAM-only stream keys over that same local trust boundary. Public diagnostics
+include only packet counters, ages, paint delay and authentication CPU time.

@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 
 import control
-from audio_source import OutputMonitor
+from audio_source import OutputMonitor,capture_command
 from i18n import tr
 import preview
 
@@ -83,11 +83,7 @@ class DemoAudio:
                 process = None
                 try:
                     source=monitor.source
-                    process = subprocess.Popen(['parec', '--device='+source, '--raw',
-                        '--format=float32le', '--rate=48000', '--channels=1', '--latency-msec=10',
-                        '--client-name=WESP Preview', '--stream-name=Desktop output monitor',
-                        '--property=media.role=music', '--property=application.icon_name=wled-control',
-                        '--property=node.virtual=true', '--property=stream.monitor=true'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                    process = subprocess.Popen(capture_command(source,10,'WESP Preview'),stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
                     import os
                     os.set_blocking(process.stdout.fileno(), False)
                     history, pending = np.zeros(2048, dtype='<f4'), bytearray()
@@ -143,6 +139,8 @@ class DesktopModel:
         self.demo = None
         self.audio = None
         self.receiver = {}
+        self.native_frame=None
+        self.native_frame_at=0
         self.ports = []
         self.setup_error=''
         self.setup_note=''
@@ -172,8 +170,14 @@ class DesktopModel:
     def preview_frame(self):
         selected=control.settings().get('controller') or {}
         if selected.get('backend')!='wesp':return None
-        try:return self.backend.setup('preview',{'mac':selected['mac']})['receiver']['frame']
-        except Exception:return None
+        try:
+            frame=self.backend.setup('preview',{'mac':selected['mac']})['receiver']['frame']
+            if not isinstance(frame,dict) or frame.get('mac')!=selected.get('mac'):raise ValueError('Preview target changed')
+            self.native_frame=frame;self.native_frame_at=time.monotonic()
+            return frame
+        except Exception:
+            self.native_frame=None
+            return None
 
     def set_demo(self, enabled, capture=True):
         if self.audio:
@@ -291,6 +295,12 @@ class DesktopModel:
                             message=(result.get('equalizer') or {}).get('message', ''))
             except Exception as error:
                 data['error'] = str(error)
+        if data['native_effects']:
+            if not data['state'].get('on'):self.native_frame=None
+            frame=self.native_frame
+            data['frame']=(frame if frame and frame.get('mac')==selected.get('mac')
+                and time.monotonic()-self.native_frame_at<.75 else None)
+        else:self.native_frame=None
         try:
             data['firmware'] = self.backend.command(['firmware-status'])['firmware']
             labels={'starting':tr('Preparing installation'),'tools':tr('Preparing installation tools'),

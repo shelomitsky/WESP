@@ -346,3 +346,21 @@ class DemoCaptureContinuityTest(unittest.TestCase):
         self.assertEqual(spawn.call_count,1)
         self.assertIn('--property=node.virtual=true',spawn.call_args.args[0])
         self.assertIn('--property=stream.monitor=true',spawn.call_args.args[0])
+
+
+class FastModeSelectionTest(unittest.TestCase):
+    def test_verified_fast_hint_uses_new_producer_without_legacy_capture_or_rpc(self):
+        import json,realtime_producer
+        handlers={}
+        prefs=dict(equalizer=True,controller=dict(mac='680947485628',count=2,backend='wesp',connection='wifi'))
+        def fast(*args):handlers[signal.SIGTERM](None,None)
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'audio-stream.json').write_text(json.dumps(dict(supported=True,active=True,mac='680947485628',count=2)))
+            with patch.object(signal,'signal',side_effect=lambda s,f:handlers.update({s:f})), \
+                 patch.object(control,'RUNTIME',root),patch.object(control,'settings',return_value=prefs), \
+                 patch.object(control,'runtime',return_value={'suspended':False}),patch.object(equalizer,'restore'), \
+                 patch.object(realtime_producer,'run',side_effect=fast) as producer, \
+                 patch.object(equalizer.subprocess,'Popen',side_effect=AssertionError('legacy capture used')), \
+                 patch.object(control,'equalizer_frame',side_effect=AssertionError('legacy RPC used')):
+                equalizer.run()
+            producer.assert_called_once()

@@ -49,6 +49,28 @@ class DesktopWindowTest(unittest.TestCase):
         while bridge._busy and time.monotonic()<deadline:self.app.processEvents();time.sleep(.01)
         self.assertEqual(model.polls,2,'full status must still run after the preview interval')
 
+    def test_native_preview_is_sparse_and_off_never_queries_rgb(self):
+        import desktop
+        class Model:
+            demo=None
+            def __init__(self):self.previews=0
+            def preview_frame(self):self.previews+=1;return {'source':'esp'}
+            def close(self):pass
+        model=Model();bridge=desktop.AppBridge(model);self.addCleanup(bridge.close);bridge.timer.stop()
+        bridge.receive(dict(action='poll',ok=True,data=dict(native_effects=True,settings={},state={'on':False})))
+        for _ in range(5):
+            bridge.refresh()
+            deadline=time.monotonic()+1
+            while bridge._busy and time.monotonic()<deadline:self.app.processEvents();time.sleep(.005)
+        self.assertEqual(model.previews,0,'Off must not request rendered RGB')
+        bridge.receive(dict(action='poll',ok=True,data=dict(native_effects=True,settings={},state={'on':True})))
+        for _ in range(5):
+            bridge.refresh()
+            deadline=time.monotonic()+1
+            while bridge._busy and time.monotonic()<deadline:self.app.processEvents();time.sleep(.005)
+        self.assertLessEqual(model.previews,1,'back-to-back timer ticks must not duplicate preview network traffic')
+        self.assertEqual(json.loads(bridge.dataJson)['frame'],{'source':'esp'},'native frame must persist between sparse reads')
+
     def test_named_preset_save_from_real_window_keeps_power_off(self):
         import control,desktop,desktop_bridge
         class Backend:

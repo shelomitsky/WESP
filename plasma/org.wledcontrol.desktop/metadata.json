@@ -12,7 +12,7 @@
         "Id": "org.wledcontrol.desktop",
         "License": "MIT",
         "Name": "WESP",
-        "Version": "0.2.0-alpha.13"
+        "Version": "0.2.0-alpha.14"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
     "KPackageStructure": "Plasma/Applet"

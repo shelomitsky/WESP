@@ -190,3 +190,16 @@ to the previously confirmed app1 when confirmation was withheld. Test lighting
 finished Off. Exact physical latency/fade timing, DHCP changes, power-cut OTA and
 the full desktop/hardware matrix remain untested. The original WLED board was
 not accessed. These results do not imply support for every ESP or LED type.
+
+## Economical real-time audio — alpha.14
+
+- [x] Fixed40-byte authenticated wire format and24-byte local format.
+- [x] Constant/silent input budget26 packets/10s, integer delta suppression.
+- [x] Native core bench drops late/auth/reorder data, collapses queued peak/silence
+  to the latest input, and preserves Off/config lease guards.
+- [x] Real-pipe capture keeps the newest immutable window while consumer stalls.
+- [x] TCP lock stall does not block UDP send; local socket backpressure drops.
+- [x] Short RMS/clocked repeat/history and sparse same-target GUI preview tests.
+- [ ] Final full release/Qt/native build, independent review and GitHub CI.
+- [ ] OTA to identified ESP; real raw-level traffic, stale/replay/fail-dark tests.
+- [ ] Physical beat-latency comparison and user acceptance.

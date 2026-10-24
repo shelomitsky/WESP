@@ -273,6 +273,11 @@ class Device:
                     self.document['effects']=effects_config.validate(reply['effects'],self.led_count)
                 if 'build_sha256' in reply and (not isinstance(reply['build_sha256'],str) or not re.fullmatch('[0-9a-f]{64}',reply['build_sha256'])):
                     raise ValueError('Invalid native build identity')
+                if 'audio_stats' in reply:
+                    stats=reply['audio_stats'] if isinstance(reply['audio_stats'],dict) else {}
+                    fields=('received','accepted','rejected','stale','reordered','age_ms','paint_delay_max_ms','render_age_ms','auth_us_max')
+                    self.document['audio_stats']={key:stats[key] for key in fields if type(stats.get(key)) is int
+                        and (-0x80000000 if key in ('age_ms','render_age_ms') else 0)<=stats[key]<=0xffffffff}
                 # Never retain arbitrary firmware fields (especially pair token).
                 wifi = reply.get('wifi')
                 if 'wifi' in reply and isinstance(wifi, dict):
@@ -637,6 +642,7 @@ class Device:
                     raise ConfigurationError('firmware_update_required','Update WESP receiver firmware over USB to configure outputs over Wi-Fi')
             else:
                 self.connect()
+            self.revoke_realtime()
             old_count = self.led_count
             self.last_frame = None
             self.led_count = sum(output['count'] for output in fields['outputs'])

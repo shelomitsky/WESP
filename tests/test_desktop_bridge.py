@@ -96,3 +96,23 @@ class DesktopModelTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class NativePreviewCacheTest(unittest.TestCase):
+    def test_full_status_keeps_only_fresh_same_target_native_frame_and_off_clears(self):
+        import desktop_bridge,control
+        from unittest.mock import patch
+        mac='680947485628';on=[True]
+        class Backend:
+            def command(self,args):
+                if args[0]=='firmware-status':return {'firmware':{}}
+                return dict(state={'on':on[0],'bri':24},native_effects=True)
+            def setup(self,*args):return {'receiver':{'frame':dict(source='esp',mac=mac,pixels=[[1,2,3]])}}
+        prefs={'controller':{'mac':mac,'count':1,'backend':'wesp'}}
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder,patch.object(control,'RUNTIME',Path(folder)),patch.object(control,'settings',return_value=prefs):
+            model=desktop_bridge.DesktopModel(Backend());self.addCleanup(model.close)
+            frame=model.preview_frame()
+            self.assertEqual(model.poll()['frame'],frame)
+            on[0]=False;self.assertIsNone(model.poll()['frame'])
+            on[0]=True;self.assertIsNone(model.poll()['frame'],'Off must discard previous colors')

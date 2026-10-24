@@ -8,6 +8,16 @@ import threading
 LOG=logging.getLogger('wesp-audio')
 
 
+def capture_command(source,latency_ms,client):
+    if source!='@DEFAULT_MONITOR@' and not source.endswith('.monitor'):
+        raise ValueError('Only an output monitor may feed lighting')
+    return ['parec','--device='+source,'--raw','--format=float32le','--rate=48000',
+        '--channels=1','--latency-msec='+str(latency_ms),'--client-name='+client,
+        '--stream-name=Desktop output monitor','--property=media.role=music',
+        '--property=application.icon_name=wled-control','--property=node.virtual=true',
+        '--property=stream.monitor=true']
+
+
 class OutputMonitor:
     def __init__(self):
         self.source='@DEFAULT_MONITOR@'

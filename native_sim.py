@@ -54,6 +54,9 @@ def library():
             lib.wesp_sim_event.argtypes=[C.c_void_p,C.c_int,C.c_char_p,C.c_float,C.c_uint32];lib.wesp_sim_event.restype=C.c_bool
             lib.wesp_sim_heartbeat.argtypes=[C.c_void_p,C.c_uint32];lib.wesp_sim_heartbeat.restype=C.c_bool
             lib.wesp_sim_frame.argtypes=[C.c_void_p,C.c_uint32];lib.wesp_sim_frame.restype=C.POINTER(C.c_uint8)
+            lib.wesp_sim_stream.argtypes=[C.c_void_p,C.POINTER(C.c_uint8),C.c_uint32];lib.wesp_sim_stream.restype=C.c_bool
+            lib.wesp_sim_datagrams.argtypes=[C.c_void_p,C.POINTER(C.c_uint8),C.c_uint,C.POINTER(C.c_uint8),C.c_uint32];lib.wesp_sim_datagrams.restype=C.c_bool
+            lib.wesp_sim_last_frame.argtypes=[C.c_void_p];lib.wesp_sim_last_frame.restype=C.c_uint32
             lib._build_directory=directory
             _LIBRARY=lib
             return lib
@@ -96,6 +99,22 @@ class Simulator:
         effects_config.colors([color]*10)
         return self.lib.wesp_sim_solid(self.handle,(C.c_uint8*3)(*color),at)
     def heartbeat(self,at):return self.lib.wesp_sim_heartbeat(self.handle,at)
+    def stream(self,sid,at):
+        if not isinstance(sid,bytes) or len(sid)!=8:raise ValueError('Invalid simulated stream')
+        return self.lib.wesp_sim_stream(self.handle,(C.c_uint8*8).from_buffer_copy(sid),at)
+    def datagrams(self,packets,at,key,sid):
+        import realtime_protocol as rt
+        values=[p for p in packets if len(p)==rt.PACKET_SIZE]
+        if not values:return False
+        if len(values)>8:raise ValueError('A receive batch is bounded to eight packets')
+        auth=[]
+        for packet in values:
+            try:rt.unpack_audio(packet,key,sid);auth.append(1)
+            except ValueError:auth.append(0)
+        raw=b''.join(values)
+        return self.lib.wesp_sim_datagrams(self.handle,(C.c_uint8*len(raw)).from_buffer_copy(raw),len(values),
+            (C.c_uint8*len(auth))(*auth),at)
+    def last_frame(self):return self.lib.wesp_sim_last_frame(self.handle)
     def frame(self,at):
         data=self.lib.wesp_sim_frame(self.handle,at)
         return [[data[i*3+j] for j in range(3)] for i in range(self.count)]

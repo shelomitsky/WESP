@@ -77,4 +77,16 @@ int main() {
   assert(fastTick.canAudio(Transport::TCP,111,session,rev));
   assert(!fastTick.canAudio(Transport::USB,111,"1111111111111111",rev));
   assert(fastTick.lastFrame==100); // opening a data grant must not renew a lease
+  Core dense,sparse;assert(dense.configure(&out,1,500));assert(sparse.configure(&out,1,500));
+  c=config();c.presets[0].style=1;c.presets[0].repeatMs=0;
+  assert(dense.configureEffects(c));assert(sparse.configureEffects(c));dense.on=sparse.on=true;
+  assert(dense.audio(.2f,.2f,Transport::TCP,100,session,rev));assert(sparse.audio(.2f,.2f,Transport::TCP,100,session,rev));
+  for (uint32_t t=110;t<1100;t+=10) {
+    assert(dense.audio(.2f,.2f,Transport::TCP,t,session,rev));
+    if (t==500 || t==900) assert(sparse.audio(.2f,.2f,Transport::TCP,t,session,rev));
+    dense.render(t);sparse.render(t);
+  }
+  assert(dense.audio(.28f,.28f,Transport::TCP,1100,session,rev));assert(sparse.audio(.28f,.28f,Transport::TCP,1100,session,rev));
+  dense.render(1100);sparse.render(1100);
+  assert(fabsf(dense.effects.pulse-sparse.effects.pulse)<.01f); // packet thinning must not invent a beat
 }

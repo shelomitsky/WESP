@@ -10,7 +10,7 @@ import time
 
 import numpy as np
 import control
-from audio_source import OutputMonitor
+from audio_source import OutputMonitor,capture_command
 
 LOG = logging.getLogger('wled-equalizer')
 RATE, SIZE, FPS = 48000, 2048, 15
@@ -61,12 +61,14 @@ class AudioFeatures:
         hz=np.fft.rfftfreq(SIZE,1/RATE);self.low=(hz>=40)&(hz<180)
         self.scale=self.window.sum()/2
 
-    def process(self,samples):
+    def process(self,samples,fast=False):
         samples=np.asarray(samples,dtype=float)
         if samples.shape!=(SIZE,) or not np.isfinite(samples).all():raise ValueError('Expected finite mono audio')
         centered=samples-samples.mean()
         spectrum=np.abs(np.fft.rfft(centered*self.window))/self.scale
-        return dict(rms=min(1.,float(np.sqrt(np.mean(centered**2)))),bass=min(1.,float(np.sqrt(np.sum(spectrum[self.low]**2)))))
+        rms_window=samples[-480:] if fast else samples
+        rms_window=rms_window-rms_window.mean()
+        return dict(rms=min(1.,float(np.sqrt(np.mean(rms_window**2)))),bass=min(1.,float(np.sqrt(np.sum(spectrum[self.low]**2)))))
 
 
 class SpatialSpectrum:
@@ -163,6 +165,8 @@ def run():
     feature_source=AudioFeatures()
     native=False;capability_checked=0;network_retry_at=0
     monitor=None
+    import realtime_producer
+    hint=realtime_producer.CapabilityHint(control.RUNTIME)
     capture_ms = PROFILES[spatial.profile]['capture_ms']
     LOG.info('Equalizer profile=%s, requested capture=%sms, USB FPS=%s',
              spatial.profile, capture_ms, USB_FPS)
@@ -177,16 +181,14 @@ def run():
                     status(tr("Paused") if mem['suspended'] else tr("Disabled"))
                     time.sleep(.3)
                     continue
+                if hint.supported(prefs):
+                    if monitor is not None:monitor.close();monitor=None
+                    realtime_producer.run(hint,lambda:stopping,status,lambda samples:feature_source.process(samples,fast=True))
+                    continue
                 # Keep one stream until the default OUTPUT actually changes.
                 if monitor is None:monitor=OutputMonitor()
                 source=monitor.source
-                proc = subprocess.Popen([
-                    'parec', '--device='+source, '--raw',
-                    '--format=float32le', '--rate=48000', '--channels=1',
-                    f'--latency-msec={capture_ms}', '--client-name=WESP Audio', '--stream-name=Desktop output monitor',
-                    '--property=media.role=music', '--property=application.icon_name=wled-control',
-                    '--property=node.virtual=true', '--property=stream.monitor=true'],
-                    stdout=subprocess.PIPE)
+                proc = subprocess.Popen(capture_command(source,capture_ms,'WESP Audio'),stdout=subprocess.PIPE)
                 os.set_blocking(proc.stdout.fileno(), False)
                 analyzer = Spectrum()
                 usb = os.environ.get('WLED_TRANSPORT', prefs.get('transport', 'usb')) == 'usb'
@@ -203,7 +205,7 @@ def run():
                         prefs, mem = control.settings(), control.runtime()
                         if not prefs['equalizer'] or mem['suspended']:
                             break
-                        if monitor.source != source:
+                        if monitor.source != source or hint.supported(prefs):
                             break
                         wait = min(.2, max(0, next_frame-time.monotonic())) if have_audio else .2
                         if selector.select(wait):

@@ -84,6 +84,7 @@ public:
     if (elapsed>2) { level=pulse=history=previous=0;reference=.1f;beatReady=false;elapsed=1.f/60; }
     clockReady=true;lastTime=now;
     const FxPreset &p=config.presets[config.active];
+    history+=(bass-history)*(1-expf(-elapsed/.35f));
     pulse*=expf(-elapsed/.18f);
     if (repeat && mode==FxMode::Music && p.style==1 && p.repeatMs && beatReady &&
         fmaxf(bass,rms*.8f)>fmaxf(p.gate/1000.f,.003f) && uint32_t(now-lastBeat)>=p.repeatMs) {
@@ -105,14 +106,12 @@ public:
   void audio(float nextRms,float nextBass,uint32_t now) {
     select(FxMode::Music,now);advance(now,false);
     const FxPreset &p=config.presets[config.active];
-    float elapsed=uint32_t(now-lastInput)/1000.f;
-    if (elapsed>2) { history=previous=0;beatReady=false;elapsed=.05f; }
+    if (uint32_t(now-lastInput)>2000) { history=previous=0;beatReady=false; }
     bool above=nextBass>fmaxf(p.gate/1000.f,.003f);
     bool onset=above && nextBass>history*1.7f && nextBass>previous*1.25f;
     bool audible=fmaxf(nextBass,nextRms*.8f)>fmaxf(p.gate/1000.f,.003f);
     bool repeat=p.style==1 && p.repeatMs && audible && (!beatReady || uint32_t(now-lastBeat)>=p.repeatMs);
     if ((onset || repeat) && (!beatReady || uint32_t(now-lastBeat)>=180)) { pulse=1;lastBeat=now;beatReady=true; }
-    history+=(nextBass-history)*(1-expf(-fminf(elapsed,.2f)/.35f));
     previous=nextBass;rms=nextRms;bass=nextBass;lastInput=now;
     // Incorporate the first sample without waiting for the first render tick.
     if (started==now) { clockReady=false;advance(now); }

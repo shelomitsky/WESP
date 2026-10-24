@@ -1,3 +1,16 @@
+# 0.2.0-alpha.14 (candidate)
+
+- Experimental paired Wi-Fi music uses fixed40-byte authenticated UDP datagrams.
+  Raw fixed-point RMS/bass changes are sent promptly; stable input refreshes400ms.
+  Control/configuration/events/OTA remain on the paired TCP channel.
+- A continuous capture thread keeps one fresh PCM window. The producer submits
+  nonblocking24-byte local messages; the owner coalesces them without the control
+  lock. Delayed, duplicate, wrong-session and old samples cannot renew the lease.
+- Native0.2.1 renders on a10ms tick and clocks repeated accents/history locally.
+  The fast path samples short-window RMS up to100Hz. USB/old-firmware fallback remains.
+- On-demand ESP previews are limited4Hz, stop at Off, and retain only a fresh
+  same-target cached frame between reads. No runtime compiler is required.
+
 # 0.2.0-alpha.13 (candidate)
 
 - Mark output-monitor capture as a virtual monitor stream on PipeWire, including

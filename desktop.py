@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 
 try:
     from PySide6.QtCore import QObject, Property, QTimer, QUrl, Signal, Slot, QLockFile
@@ -126,8 +127,11 @@ class AppBridge(QObject):
                 self.device_ticks = getattr(self, 'device_ticks', 0) + 1
                 import preview
                 current = json.loads(self._data)
-                if current.get('native_effects'):
-                    native_preview=True
+                if current.get('native_effects') and current.get('state',{}).get('on'):
+                    if time.monotonic()>=getattr(self,'next_native_preview',0):
+                        self.next_native_preview=time.monotonic()+.25
+                        native_preview=True
+                if current.get('native_effects') and not native_preview:return
                 selected = (current.get('settings') or {}).get('controller') or {}
                 frame = preview.read(control.RUNTIME / 'frame-preview.json', selected.get('mac'))
                 if not native_preview and frame != current.get('frame'):

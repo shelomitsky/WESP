@@ -11,7 +11,7 @@ Author: **Chapman**. Licensed under MIT. Please credit Chapman when sharing
 screenshots, builds or articles about this project; retain the copyright and
 license notices when distributing its code.
 
-**0.2.0-alpha.13: local release candidate.** Stable desktop-output capture follows
+**0.2.0-alpha.14: local release candidate.** Stable desktop-output capture follows
 actual output changes; receiver errors do not recreate the recording stream.
 PipeWire output capture is classified as a virtual monitor, so KDE does not
 mislabel WESP as microphone use. Other desktops may display capture differently. Includes a standalone Qt application,
@@ -23,6 +23,15 @@ an existing installation automatically and has not been published.
 
 [Русский быстрый старт](QUICKSTART.ru.md) · [Changes](CHANGELOG.md) ·
 [Verification and remaining acceptance](RELEASE_CHECKLIST.md)
+
+Experimental native0.2.1 adds a separate fast music data path: fixed40-byte
+HMAC-authenticated UDP messages with fixed-point RMS/bass and sample time. Changes
+are sent up to100Hz; identical levels/silence refresh every400ms. Old/reordered
+samples are discarded instead of replayed. The desktop capture continuously drains
+into one2048-sample window; short-window RMS observes the latest10ms. Paired TCP
+still handles settings, events, power and OTA. Old native firmware and USB keep
+the existing feature/frame fallback. Physical latency results belong in the
+release checklist; software timer values alone are not an acoustic measurement.
 
 ## Standalone application
 

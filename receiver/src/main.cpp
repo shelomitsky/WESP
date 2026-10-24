@@ -278,6 +278,7 @@ const char *configure(const cJSON *request) {
   }
   // Validate before darkening. Initialize outputs before committing the NVS
   // blob, so a rejected hardware configuration is not installed on next boot.
+  realtime.revoke();
   core.off(); paint();
   core.configure(next.outputs,next.outputCount,next.maxMilliamps);
   bool installed=installOutputs();
