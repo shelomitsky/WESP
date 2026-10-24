@@ -169,9 +169,24 @@ The previously accepted WLED board must remain unchanged.
   status or disable controls; legacy Qt setup remains a separate regression gate.
 - [x] Independent final review; two P2 findings fixed with failing regressions:
   heartbeat send timestamp and refused OTA worker remaining queued.
-- [ ] Final full release/Qt/native build and GitHub CI on final commit.
-- [ ] Physical app-only0.1.1→0.2.0 update with full backup and retained pairing.
-- [ ] Two-strip music, finite signal/volume overlays and current-music resumption.
-- [ ] Wallpaper heartbeat/fade, Off, silence and source-loss checks using camera.
-- [ ] CFG/presets persist across reboot; OTA trial→valid and unconfirmed rollback
+- [x] Final full release/Qt/native build and GitHub CI on final commit.
+- [x] Physical app-only0.1.1→0.2.0 update with full backup and retained pairing.
+- [x] Two-strip music, finite signal/volume overlays and current-music resumption.
+- [x] Wallpaper heartbeat/fade, Off, silence and source-loss checks using camera.
+- [x] CFG/presets persist across reboot; OTA trial→valid and unconfirmed rollback
   demonstrated on the identified board. No power-cut test has been performed.
+
+
+Physical evidence on the test ESP32/CP2102, two ten-pixel GRB outputs (GPIO2/4),
+500mA cap: app-only update retained the boot/NVS area byte-for-byte and pairing.
+Wi-Fi configuration read-back, local rendering, source expiry, explicit Off,
+constant non-bass tone repeats and continuously transmitted silence passed.
+Cropped camera stills showed blue on both strips and darkness after expiry.
+A native desktop-output test sent198 audio packets and zero RGB frames over10s;
+142 audio packets continued after a notification, with42 distinct ESP previews.
+The7/8 wallpaper heartbeat was sent at7.111s for an8s timeout; loss then darkened
+both strips. Named preset/outputs survived OTA; trial app0 automatically returned
+to the previously confirmed app1 when confirmation was withheld. Test lighting
+finished Off. Exact physical latency/fade timing, DHCP changes, power-cut OTA and
+the full desktop/hardware matrix remain untested. The original WLED board was
+not accessed. These results do not imply support for every ESP or LED type.
