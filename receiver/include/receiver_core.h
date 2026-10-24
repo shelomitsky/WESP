@@ -211,7 +211,7 @@ public:
           effects.fade=1-float(age-deadline)/effects.config.wallpaperFade;
         else { dark();return true; }
       }
-      if (nativeActive() && uint32_t(now-lastEffectPaint)>=20) { lastEffectPaint=now;return true; }
+      if (nativeActive() && uint32_t(now-lastEffectPaint)>=10) { lastEffectPaint=now;return true; }
     }
     return false;
   }

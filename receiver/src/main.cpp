@@ -10,11 +10,13 @@
 #include "receiver_core.h"
 #include "effects_protocol.h"
 #include "ota_receiver.h"
+#include "realtime_receiver.h"
 
 using namespace wesp;
 namespace {
 Core core;
 OtaReceiver ota;
+RealtimeReceiver realtime;
 EffectsConfig savedEffects{};
 bool haveEffects=false;
 Preferences preferences;
@@ -74,6 +76,7 @@ void paint() {
     start+=out.count;
   }
   delayMicroseconds(80);
+  realtime.painted(millis());
 }
 void darkness() { core.dark(); paint(); }
 bool installOutputs() {
@@ -143,10 +146,12 @@ void addStatus(cJSON *reply,bool detailed) {
   cJSON_AddNumberToObject(reply,"bri",core.brightness);
   if (!detailed) return;
   cJSON_AddStringToObject(reply,"firmware","WESP");
-  cJSON_AddStringToObject(reply,"version","0.2.0");
+  cJSON_AddStringToObject(reply,"version","0.2.1");
   cJSON *capabilities=cJSON_AddObjectToObject(reply,"capabilities");
   cJSON_AddBoolToObject(capabilities,"wifi_configure",true);
   cJSON_AddBoolToObject(capabilities,"native_effects",true);
+  cJSON_AddBoolToObject(capabilities,"realtime_audio",true);
+  realtime.stats(reply);
   cJSON_AddBoolToObject(capabilities,"ota",true);
   cJSON_AddBoolToObject(capabilities,"preview",true);
   cJSON_AddNumberToObject(capabilities,"max_presets",MaxFxPresets);
@@ -177,7 +182,7 @@ void addStatus(cJSON *reply,bool detailed) {
   cJSON_AddStringToObject(wifi,"ip",connected?WiFi.localIP().toString().c_str():"");
   cJSON_AddStringToObject(wifi,"host",wifiHost);
 }
-void sendReply(Transport transport,int id,const char *error=nullptr,bool detailed=false,bool pair=false,bool preview=false) {
+void sendReply(Transport transport,int id,const char *error=nullptr,bool detailed=false,bool pair=false,bool preview=false,bool grant=false,bool clock=false) {
   cJSON *reply=cJSON_CreateObject();
   if (!reply) return;
   cJSON_AddBoolToObject(reply,"ok",error==nullptr);
@@ -186,7 +191,10 @@ void sendReply(Transport transport,int id,const char *error=nullptr,bool detaile
   cJSON_AddNumberToObject(reply,"proto",1);
   if (error) cJSON_AddStringToObject(reply,"error",error);
   else {
-    addStatus(reply,detailed);if (pair) cJSON_AddStringToObject(reply,"token",token);
+    addStatus(reply,detailed);
+    if (grant) realtime.grant(reply);
+    if (clock) cJSON_AddNumberToObject(reply,"audio_clock_ms",millis());
+    if (pair) cJSON_AddStringToObject(reply,"token",token);
     if (preview && core.count) {
       char *pixels=static_cast<char *>(malloc(core.count*4+1));size_t length=0;
       if (pixels && !mbedtls_base64_encode(reinterpret_cast<unsigned char *>(pixels),core.count*4+1,&length,core.render(millis()),core.count*3))
@@ -241,6 +249,7 @@ void joinWifi() {
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(hostname);
   WiFi.setAutoReconnect(true);
+  WiFi.setSleep(false);
   WiFi.begin(config.ssid,config.password);
   wifiStarted=true;
 }
@@ -306,12 +315,18 @@ void process(const char *line,Transport transport) {
       if (freshSession) core.announceConnected(millis(),outputsReady);
     }
     else if (!strncmp(op,"ota_",4)) {
-      if (!strcmp(op,"ota_begin")) { core.off();paint(); }
+      if (!strcmp(op,"ota_begin")) { realtime.revoke();core.off();paint(); }
       if (!strcmp(op,"ota_confirm") && (!nvsReady || !outputsReady)) error="ota_self_test_failed";
       else error=ota.process(op,request,transport,requestedSession,core);
     }
     else if (ota.active() && strcmp(op,"state")) error="ota_busy";
     else if (!strcmp(op,"preview")) { /* A read never renews the lease. */ }
+    else if (!strcmp(op,"audio_open")) {
+      if (transport!=Transport::TCP || !realtime.open(core,requestedSession,stringField(request,"revision"),client.remoteIP())) error="audio_unavailable";
+    }
+    else if (!strcmp(op,"audio_clock")) {
+      if (transport!=Transport::TCP) error="tcp_only";
+    }
     else if (!strcmp(op,"effects_configure")) {
       EffectsConfig next{};
       if (!parseEffects(field(request,"effects"),next,core.count)) error="invalid_effects";
@@ -320,6 +335,7 @@ void process(const char *line,Transport transport) {
         bool changed=!haveEffects || memcmp(&savedEffects,&next,sizeof(next));
         if (changed && (!nvsReady || preferences.putBytes("effects",&next,sizeof(next))!=sizeof(next))) error="storage_error";
         else {
+          if (changed) realtime.revoke();
           if (changed || !core.effectRevision(next.revision)) core.configureEffects(next);
           savedEffects=next;haveEffects=true;
         }
@@ -328,12 +344,13 @@ void process(const char *line,Transport transport) {
     else if (!strcmp(op,"audio")) {
       const cJSON *rms=field(request,"rms"),*bass=field(request,"bass");
       if (!cJSON_IsNumber(rms) || !cJSON_IsNumber(bass) || !core.audio(rms->valuedouble,bass->valuedouble,transport,millis(),requestedSession,stringField(request,"revision"))) error="invalid_audio_or_busy";
+      else realtime.revoke();
     }
     else if (!strcmp(op,"effect")) {
       const char *mode=stringField(request,"mode");uint8_t rgb[3]{};
       if (!mode || (strcmp(mode,"solid") && strcmp(mode,"runner")) || !fxRgb(field(request,"color"),rgb) ||
           !core.startEffect(!strcmp(mode,"solid")?FxMode::Solid:FxMode::Runner,rgb,transport,millis(),requestedSession,stringField(request,"revision"))) error="invalid_effect_or_busy";
-      else memcpy(color,rgb,3);
+      else { realtime.revoke();memcpy(color,rgb,3); }
     }
     else if (!strcmp(op,"heartbeat")) {
       if (!core.keepalive(transport,millis(),requestedSession,stringField(request,"revision"))) error="invalid_heartbeat";
@@ -363,7 +380,7 @@ void process(const char *line,Transport transport) {
         else for (size_t i=0;i<3;++i) if (!integer(cJSON_GetArrayItem(rgb,i),0,255,components[i])) error="invalid_state";
       }
       if (!error) {
-        if (on) { if (cJSON_IsTrue(on)) core.on=true; else core.off(); }
+        if (on) { if (cJSON_IsTrue(on)) core.on=true; else { realtime.revoke();core.off(); } }
         core.brightness=brightness;
         for (size_t i=0;i<3;++i) color[i]=components[i];
         core.tick(millis()); paint();
@@ -371,10 +388,10 @@ void process(const char *line,Transport transport) {
     } else if (!strcmp(op,"frame")) {
       int count=0; const char *pixels=stringField(request,"pixels");
       if (!integer(field(request,"count"),1,MaxPixels,count) || !pixels || !core.frame(pixels,count,transport,millis(),session.value)) error="invalid_frame_or_busy";
-      else paint();
+      else { realtime.revoke();paint(); }
     } else error="unsupported_op";
   }
-  sendReply(transport,id,error,hello || (op && (!strcmp(op,"configure") || !strcmp(op,"effects_configure"))),op && !strcmp(op,"pair") && !error,op && !strcmp(op,"preview"));
+  sendReply(transport,id,error,hello || (op && (!strcmp(op,"configure") || !strcmp(op,"effects_configure"))),op && !strcmp(op,"pair") && !error,op && !strcmp(op,"preview"),op && !strcmp(op,"audio_open") && !error,op && !strcmp(op,"audio_clock") && !error);
   cJSON_Delete(request);
 }
 void input(Stream &stream,LineReader &reader,Transport transport) {
@@ -429,6 +446,8 @@ void loop() {
     else { client=next; client.setNoDelay(true); client.setTimeout(0); tcpLine.reset(); tcpAcceptedAt=millis(); }
   }
   if (tcp.present) input(client,tcpLine,Transport::TCP);
+  if (wifiStarted && WiFi.status()==WL_CONNECTED) realtime.start();
+  realtime.poll(core,tcp.present && tcp.authenticated,tcp.session.value,client.remoteIP(),ota.active());
   if (tcp.present && !tcp.authenticated && uint32_t(millis()-tcpAcceptedAt)>=2000) client.stop();
   if (wifiStarted && WiFi.status()!=WL_CONNECTED && core.owner==Transport::TCP) { core.disconnect(Transport::TCP,tcp.session.value);paint(); }
   if (core.tick(millis())) paint();

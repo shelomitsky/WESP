@@ -79,12 +79,16 @@ public:
     }
     fade=1;
   }
-  void advance(uint32_t now) {
+  void advance(uint32_t now,bool repeat=true) {
     float elapsed=clockReady?uint32_t(now-lastTime)/1000.f:1.f/60;
     if (elapsed>2) { level=pulse=history=previous=0;reference=.1f;beatReady=false;elapsed=1.f/60; }
     clockReady=true;lastTime=now;
     const FxPreset &p=config.presets[config.active];
     pulse*=expf(-elapsed/.18f);
+    if (repeat && mode==FxMode::Music && p.style==1 && p.repeatMs && beatReady &&
+        fmaxf(bass,rms*.8f)>fmaxf(p.gate/1000.f,.003f) && uint32_t(now-lastBeat)>=p.repeatMs) {
+      pulse=1;lastBeat=now;
+    }
     float drive=fmaxf(bass,rms*.8f),gate=p.gate/1000.f,target=0;
     if (drive>gate) {
       float rate=drive>reference?.08f:.006f;
@@ -99,7 +103,7 @@ public:
     if (pulse<.005f) pulse=0;
   }
   void audio(float nextRms,float nextBass,uint32_t now) {
-    select(FxMode::Music,now);advance(now);
+    select(FxMode::Music,now);advance(now,false);
     const FxPreset &p=config.presets[config.active];
     float elapsed=uint32_t(now-lastInput)/1000.f;
     if (elapsed>2) { history=previous=0;beatReady=false;elapsed=.05f; }

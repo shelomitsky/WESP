@@ -64,4 +64,14 @@ int main() {
   for (uint32_t t=150;t<=600;t+=50) { assert(tone.audio(.2f,0,Transport::TCP,t,session,rev));tone.render(t); }
   assert(tone.effects.pulse>.8f); // steady non-bass tone also repeats
   assert(!tone.audio(NAN,.2f,Transport::TCP,650,session,rev));assert(tone.lastFrame==600);
+  Core localRepeat;assert(localRepeat.configure(&out,1,500));c=config();c.presets[0].style=1;c.presets[0].repeatMs=500;
+  assert(localRepeat.configureEffects(c));localRepeat.on=true;
+  assert(localRepeat.audio(.2f,0,Transport::TCP,100,session,rev));
+  for (uint32_t t=110;t<=600;t+=10) { localRepeat.tick(t);localRepeat.render(t); }
+  assert(localRepeat.effects.pulse>.9f); // repeat is clocked locally without another input packet
+  assert(localRepeat.audio(0,0,Transport::TCP,1100,session,rev));localRepeat.render(1100);
+  assert(localRepeat.effects.pulse<.2f); // silence at a repeat boundary does not fire an old accent
+  Core fastTick;assert(fastTick.configure(&out,1,500));c=config();assert(fastTick.configureEffects(c));fastTick.on=true;
+  assert(fastTick.audio(.2f,.2f,Transport::TCP,100,session,rev));assert(fastTick.tick(100));
+  assert(fastTick.tick(110)); // active native effects paint at10ms rather than20ms
 }
