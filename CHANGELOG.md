@@ -1,5 +1,14 @@
 # 0.2.0-alpha.14 (candidate)
 
+## 0.2.0-alpha.15
+
+- Smooth window-only native music preview reuses the demo renderer and existing
+  captured features, without another capture/FFT or extra ESP traffic.
+- Local rendering continues while device controls are busy; status refreshes
+  preserve the latest frame. Off, identity changes and stale input clear it.
+- First-alpha notes and Russian setup guide now describe native USB/Wi-Fi,
+  first light, presets and OTA, with a narrow tested support matrix.
+
 - Experimental paired Wi-Fi music uses fixed40-byte authenticated UDP datagrams.
   Raw fixed-point RMS/bass changes are sent promptly; stable input refreshes400ms.
   Control/configuration/events/OTA remain on the paired TCP channel.

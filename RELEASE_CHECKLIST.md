@@ -1,6 +1,6 @@
 # Release candidate acceptance
 
-Product: WESP. Version: 0.2.0-alpha.11. Author: Chapman. License: MIT.
+Product: WESP. Version: 0.2.0-alpha.15. Author: Chapman. License: MIT.
 The first alpha targets KDE Plasma 6; the product name is desktop-independent.
 
 ## Standalone application — alpha.8
@@ -18,7 +18,7 @@ The first alpha targets KDE Plasma 6; the product name is desktop-independent.
 - [ ] Hardware and demo toggling while a real music session continues unchanged.
 - [ ] Visible language/theme/layout acceptance of all application pages.
 
-Guided first-light and spatial wallpapers remain future milestones.
+Guided first-light is implemented below; spatial wallpapers remain future work.
 
 ## First light and Wi-Fi configuration — alpha.10
 
@@ -99,7 +99,7 @@ were applied with backups; after the latest update, all 34 managed hashes
 matched and Plasma/USB/equalizer services were active. Existing-session upgrade
 is verified; fresh install, rollback and logout/login acceptance remain open.
 
-## Required before public release (not passed here)
+## Extended acceptance matrix (not all passed; outside first-alpha support claims)
 
 - [ ] Fresh real KDE Plasma 6 session: QML modules, widget picker, scrolling many sections,
   text entry and layout save/cancel behavior. qmllint alone is insufficient.
@@ -216,3 +216,26 @@ old when sent. Receiver clock estimates and paint counters are diagnostics,
 not acoustic-to-light measurements. The user accepted visible beat alignment on
 Queen’s “Another One Bites the Dust”, reporting no noticeable lag. Instrumented
 acoustic-to-light latency has not been measured.
+
+## First-alpha scope and smooth preview — alpha.15
+
+[First-alpha notes](FIRST_ALPHA.md) define the current narrow acceptance contract.
+Earlier unchecked entries are historical/extended scenarios, not evidence of
+support for untested desktops, hardware or lifecycle combinations.
+
+- [x] Local feature mirror is private, latest-only and best-effort; bad preview
+  cannot fail audio delivery. Freshness, target, replacement and torn-write tests.
+- [x] Existing demo renderer accepts precomputed features without another FFT.
+  Loud normalized PCM regression covered separately; internal FFT energy can exceed1.
+- [x] Actual Qt: local frames continue while a control command is busy, full
+  status does not blank them, and local preview suppresses extra ESP frame reads.
+- [x] Named-platform fresh-HOME installation/window smoke and source privacy scan.
+- [ ] Final CI, installed hash/settings checks and live preview traffic comparison.
+
+Alpha15 candidate:249 tests/full release lifecycle PASS; actualQt desktop12
+and setup8 PASS. A staged install from the complete archive into a fresh HOME/XDG
+on the named Ubuntu26.04.1/Plasma6.6.6 Wayland session opened all5 pages,
+rendered94 demo frames in3.5s in Russian (92 in an earlier English pass), and
+created no settings/credentials or physical device commands. This is a fresh
+application profile, not a fresh real Plasma login. Tracked history539 paths
+contained no runtime/credential/flash-backup artifacts; package hygiene passes.

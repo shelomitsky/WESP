@@ -11,15 +11,18 @@ Author: **Chapman**. Licensed under MIT. Please credit Chapman when sharing
 screenshots, builds or articles about this project; retain the copyright and
 license notices when distributing its code.
 
-**0.2.0-alpha.14: local release candidate.** Stable desktop-output capture follows
-actual output changes; receiver errors do not recreate the recording stream.
-PipeWire output capture is classified as a virtual monitor, so KDE does not
-mislabel WESP as microphone use. Other desktops may display capture differently. Includes a standalone Qt application,
-transport-free music demo, coherent Pulse style, music presets, bounded strip checks
-and output configuration over Wi-Fi for native firmware 0.1.2. Generalized device/layout support and
-the new installer have automated checks. A fresh KDE session and physical LEDs
-still need acceptance before a public release. This candidate does not replace
-an existing installation automatically and has not been published.
+**0.2.0-alpha.15 — first alpha candidate.** Try the music demo without hardware,
+then connect one ESP for desktop music, accent lighting and temporary signals.
+Native WESP0.2.1 runs the effects locally over USB or Wi-Fi, supports paired
+configuration/presets and OTA, and rejects stale music instead of replaying it.
+The standalone window renders a smooth calculated music preview locally;
+opening it does not add audio capture or ESP frame requests for that preview.
+
+The tested desktop is Ubuntu26.04.1/KDE Plasma6.6 with a classic ESP32 and two
+RGB strips. This is an experimental alpha with a narrow support matrix, not a
+claim of compatibility with every board or desktop. See [first-alpha notes](FIRST_ALPHA.md)
+for verified paths and known limitations. Install and firmware replacement are
+explicit user actions; an existing controller is never flashed automatically.
 
 [Русский быстрый старт](QUICKSTART.ru.md) · [Changes](CHANGELOG.md) ·
 [Verification and remaining acceptance](RELEASE_CHECKLIST.md)
@@ -43,14 +46,17 @@ Closing the window leaves the desktop services running.
 
 **Try without an ESP** listens to the computer's audio output and uses the same
 desktop music analysis and section renderer. Native ESP rendering is checked
-with the C++ software bench and read back from the ESP in live device mode.
+with the C++ software bench; the device window uses a calculated local music
+preview, with actual ESP frames as a slower fallback outside that path.
 Its power, brightness and tuning are
 temporary and isolated from a real controller, including one already running.
 It never opens a device or changes the saved controller, network or pairing.
 The demo ends when the window closes. There is no microphone or screen capture.
 
-Device preview shows the latest host RGB frame and its age, separately from
-connection state. It is not an optical/current measurement. Initial standalone
+During native Wi-Fi music, device preview reuses the demo renderer with the
+same RMS/bass already captured for the ESP. Only the open window renders it;
+there is no second capture, FFT or extra ESP traffic. Other modes use the latest
+host frame or an on-demand ESP frame, separately from connection state. It is not an optical/current measurement. Initial standalone
 support is still Linux/KDE Plasma 6; moving the UI out of Plasma does not make
 the KDE integrations available on other desktops automatically.
 
@@ -69,7 +75,7 @@ The launcher automatically uses that private GUI interpreter when system Python
 does not provide PySide6. The service interpreter remains `/usr/bin/python3`.
 PySide6 is a separate upstream dependency; WESP's MIT license covers its own code.
 No package manager or elevated privileges are invoked by the application itself.
-Guided strip calibration remains a later milestone.
+The Strips page offers bounded direction and RGB checks.
 
 ### Music scenes
 
@@ -88,8 +94,8 @@ The overview names the active base or temporary signal. Selecting Calm light
 during the volume indicator returns to the current desktop accent after the
 indicator expires, without replaying an old pre-music snapshot. Calm currently
 uses the KDE accent; spatial wallpapers and automatic idle scenes are separate work.
-The new Pulse appearance and preset values remain experimental pending owner
-physical acceptance across different music and speech.
+Pulse and meter remain experimental. The owner accepted beat alignment on
+Another One Bites the Dust; this is not an instrumented latency measurement.
 
 ## Features
 
