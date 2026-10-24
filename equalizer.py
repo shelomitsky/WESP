@@ -118,8 +118,8 @@ class SpatialSpectrum:
         return self.features(rms,float(bass))
 
     def features(self,rms,bass,elapsed=1/60):
-        if (not all(math.isfinite(v) for v in (rms,bass,elapsed)) or not 0<=rms<=1
-                or not 0<=bass<=1 or not 0<=elapsed<=2):raise ValueError('Invalid audio features')
+        if (not all(math.isfinite(v) for v in (rms,bass,elapsed)) or rms<0
+                or bass<0 or not 0<=elapsed<=2):raise ValueError('Invalid audio features')
         self.bass,self.rms=bass,rms
         cadence=elapsed*USB_FPS
         # Track the recent programme level, independently of the PC's volume.

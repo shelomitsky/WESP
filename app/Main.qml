@@ -128,7 +128,7 @@ ApplicationWindow {
                 }
                 Item { Layout.fillHeight:true }
                 Button { text:root.demo ? root.t("Back to my device") : root.t("Try without an ESP"); Layout.fillWidth:true; enabled:!bridge.busy; onClicked:bridge.setDemo(!root.demo) }
-                Label { text:root.demo ? root.t("Demo — your device is unchanged") : "0.2.0-alpha.14"; wrapMode:Text.WordWrap; Layout.fillWidth:true; opacity:.6 }
+                Label { text:root.demo ? root.t("Demo — your device is unchanged") : "0.2.0-alpha.15"; wrapMode:Text.WordWrap; Layout.fillWidth:true; opacity:.6 }
             }
         }
         ColumnLayout {
@@ -168,7 +168,7 @@ ApplicationWindow {
                             Button { objectName:"calmSceneButton";text:root.t("Calm light");checkable:true;checked:!root.prefs.equalizer && !!root.prefs.kde;enabled:root.demo || root.data.online;onClicked:bridge.action("scene",["calm"]) }
                             Item { Layout.fillWidth:true }
                             ComboBox { enabled:!!root.prefs.equalizer;model:[root.t("Level meter"),root.t("Pulse")];currentIndex:root.prefs.music_style==="pulse" ? 1 : 0;onActivated:root.setting("music_style",currentIndex ? "pulse" : "meter") }
-                            Label { text:root.demo ? root.t("Live demo") : root.data.native_effects ? root.t("ESP preview") : root.t("Host frame preview"); opacity:.6 }
+                            Label { text:root.demo ? root.t("Live demo") : (root.data.frame || {}).source==="music-local" ? root.t("Host frame preview") : root.data.native_effects ? root.t("ESP preview") : root.t("Host frame preview"); opacity:.6 }
                         }
                         Label { text:(root.data.activity || {}).label || root.data.message || root.t("Desktop lighting"); wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:17 }
                         Label { visible:!!root.prefs.equalizer; text:root.data.message || ""; opacity:.65;wrapMode:Text.WordWrap;Layout.fillWidth:true }

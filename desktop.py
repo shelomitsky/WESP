@@ -55,6 +55,11 @@ class AppBridge(QObject):
         self.timer.setInterval(100)
         self.timer.timeout.connect(self.refresh)
         self.timer.start()
+        self.frame_timer=QTimer(self)
+        self.frame_timer.setInterval(33)
+        self.frame_timer.timeout.connect(self.refresh_local_frame)
+        self.frame_timer.start()
+        self.local_frame_at=0
         self.refresh()
 
     @Property(str, notify=changed)
@@ -117,6 +122,23 @@ class AppBridge(QObject):
         self.enqueue('demo', [enabled], None)
 
     @Slot()
+    def refresh_local_frame(self):
+        if self._closed or self.view_generation!=self.generation:return
+        current=json.loads(self._data)
+        method=getattr(self.model,'local_frame',None)
+        if method is None:return
+        try:frame=method(current)
+        except (ValueError,OSError,KeyError):frame=None
+        if frame is None:
+            self.local_frame_at=0
+            if (current.get('frame') or {}).get('source')=='music-local':
+                current['frame']=None;self._data=json.dumps(current);self.changed.emit()
+            return
+        if frame==current.get('frame'):return
+        self.local_frame_at=time.monotonic()
+        current['frame']=frame;self._data=json.dumps(current);self.changed.emit()
+
+    @Slot()
     def refresh(self):
         if self._busy or self._closed:
             return
@@ -127,7 +149,8 @@ class AppBridge(QObject):
                 self.device_ticks = getattr(self, 'device_ticks', 0) + 1
                 import preview
                 current = json.loads(self._data)
-                if current.get('native_effects') and current.get('state',{}).get('on'):
+                local_recent=(current.get('frame') or {}).get('source')=='music-local' and time.monotonic()-self.local_frame_at<.12
+                if current.get('native_effects') and current.get('state',{}).get('on') and not local_recent:
                     if time.monotonic()>=getattr(self,'next_native_preview',0):
                         self.next_native_preview=time.monotonic()+.25
                         native_preview=True
@@ -169,7 +192,17 @@ class AppBridge(QObject):
     def receive(self, result):
         self._busy = False
         if result['ok']:
-            self._data = json.dumps(result['data'])
+            incoming=result['data'];previous=json.loads(self._data).get('frame') or {}
+            selected=(incoming.get('settings') or {}).get('controller') or {}
+            if (result.get('generation',self.generation)==self.generation==self.view_generation
+                    and incoming.get('target')=='device' and incoming.get('online') and incoming.get('native_effects')
+                    and incoming.get('state',{}).get('on') and incoming.get('settings',{}).get('equalizer')
+                    and incoming.get('activity',{}).get('effective','music')=='music'
+                    and previous.get('source')=='music-local' and previous.get('mac')==selected.get('mac')
+                    and len(previous.get('pixels',[]))==selected.get('count')
+                    and time.monotonic()-self.local_frame_at<.12):
+                incoming=dict(incoming,frame=previous)
+            self._data = json.dumps(incoming)
             self.view_generation = result.get('generation', self.generation)
             if result['action'] != 'poll':
                 self._error = ''
@@ -187,6 +220,7 @@ class AppBridge(QObject):
             return
         self._closed = True
         self.timer.stop()
+        self.frame_timer.stop()
         self.queue.clear()
         self.executor.shutdown(wait=True, cancel_futures=True)
         self.model.close()

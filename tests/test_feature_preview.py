@@ -53,6 +53,14 @@ class MailboxTest(unittest.TestCase):
             self.assertEqual(len(listener.recv(100)),24)
 
 class FeaturesTest(unittest.TestCase):
+    def test_normal_loud_pcm_keeps_legacy_bass_energy_above_one(self):
+        import equalizer,numpy as np
+        samples=.9*np.sin(2*np.pi*100*np.arange(2048)/48000)
+        analyzer=equalizer.SpatialSpectrum()
+        pixels=analyzer.process(samples)
+        self.assertGreater(analyzer.bass,1)
+        self.assertTrue(any(any(rgb) for rgb in pixels))
+
     def test_existing_renderer_uses_features_without_another_fft(self):
         import music
         sections=[dict(id='a',name='A',start=0,count=3,reverse=False,placement='left'),dict(id='b',name='B',start=4,count=3,reverse=True,placement='right')]

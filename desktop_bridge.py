@@ -141,6 +141,8 @@ class DesktopModel:
         self.receiver = {}
         self.native_frame=None
         self.native_frame_at=0
+        self.feature_preview=preview.FeatureSession(control.RUNTIME)
+        self.preview_memory={};self.preview_memory_at=0
         self.ports = []
         self.setup_error=''
         self.setup_note=''
@@ -167,6 +169,26 @@ class DesktopModel:
             return 'demo'
         return 'device:' + str((control.settings().get('controller') or {}).get('mac', ''))
 
+    def local_frame(self,data):
+        if self.demo is not None:
+            return self.audio.record if data.get('target')=='demo' and self.audio else None
+        prefs=data.get('settings',{});selected=prefs.get('controller') or {};state=data.get('state',{})
+        if (data.get('target')!='device' or not data.get('online') or not data.get('native_effects')
+                or not state.get('on') or not prefs.get('equalizer') or selected.get('backend')!='wesp'
+                or selected.get('connection')!='wifi'):
+            self.feature_preview.clear();return None
+        now=time.monotonic()
+        if now>=self.preview_memory_at:
+            self.preview_memory=control.read_json(control.RUNTIME/'state.json',{})
+            self.preview_memory_at=now+.1
+        effective=data.get('activity',{}).get('effective','music')
+        if self.preview_memory.get('controller_mac')==selected.get('mac'):
+            import scenes
+            effective=scenes.activity(prefs,self.preview_memory,state,time.time())['effective']
+        if effective!='music':
+            self.feature_preview.clear();return None
+        return self.feature_preview.frame(prefs,state)
+
     def preview_frame(self):
         selected=control.settings().get('controller') or {}
         if selected.get('backend')!='wesp':return None
@@ -180,6 +202,7 @@ class DesktopModel:
             return None
 
     def set_demo(self, enabled, capture=True):
+        self.feature_preview.clear()
         if self.audio:
             self.audio.close()
             self.audio = None
@@ -191,6 +214,7 @@ class DesktopModel:
             self.demo = None
 
     def close(self):
+        self.feature_preview.close()
         if self.audio:
             self.audio.close()
             self.audio = None

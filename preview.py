@@ -169,3 +169,31 @@ class DemoSession:
                         source='calibration' if calibration['active'] else 'music' if self.prefs['equalizer'] else 'calm', sequence=self.sequence, updated=time.monotonic(),
                         stale=False, sections=copy.deepcopy(self.sections), on=self.on,
                         settings=copy.deepcopy(self.prefs))
+
+
+class FeatureSession:
+    """Window-only calculated music, driven by the producer's existing levels."""
+    def __init__(self,runtime):
+        from feature_preview import Reader
+        self.reader=Reader(runtime);self.renderer=None;self.identity=None;self.sequence=0
+
+    def clear(self):self.renderer=None;self.identity=None
+
+    def frame(self,prefs,state):
+        selected=prefs.get('controller') or {};identity=(selected.get('mac'),selected.get('count'))
+        sample=self.reader.read(*identity)
+        if sample is None:self.clear();return None
+        if self.renderer is None or self.identity!=identity:
+            import music
+            self.renderer=music.Renderer();self.identity=identity
+        self.renderer.features(sample[3]/65535,sample[4]/65535,prefs)
+        colors=None
+        if prefs.get('equalizer_palette')=='wallpaper':
+            import wallpaper
+            colors=wallpaper.cached(control.RUNTIME)['colors']
+        pixels=self.renderer.pixels(prefs,prefs.get('sections',[]),identity[1],colors)
+        self.sequence+=1
+        return dict(target='device',mac=identity[0],pixels=pixels,brightness=state.get('bri',255),
+            source='music-local',updated=time.monotonic(),sequence=self.sequence,stale=False)
+
+    def close(self):self.reader.close();self.clear()

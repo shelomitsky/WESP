@@ -28,6 +28,27 @@ class DesktopWindowTest(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QGuiApplication.instance() or QGuiApplication([])
 
+    def test_local_frames_continue_while_control_lane_is_busy_and_skip_esp_reads(self):
+        import desktop
+        class Model:
+            demo=None
+            def local_frame(self,data):return dict(source='music-local',mac='680947485628',pixels=[[8,4,2]],sequence=1)
+            def close(self):pass
+        bridge=desktop.AppBridge(Model());self.addCleanup(bridge.close);bridge.timer.stop()
+        bridge.receive(dict(action='poll',ok=True,data=dict(target='device',online=True,native_effects=True,state={'on':True},settings={'equalizer':True,'controller':{'mac':'680947485628','count':1}})))
+        self.assertTrue(hasattr(bridge,'refresh_local_frame'))
+        bridge._busy=True;bridge.current_action='power'
+        bridge.refresh_local_frame()
+        self.assertEqual(json.loads(bridge.dataJson)['frame']['source'],'music-local')
+        bridge._busy=False
+        bridge.receive(dict(action='poll',ok=True,data=dict(target='device',online=True,native_effects=True,state={'on':True},settings={'equalizer':True,'controller':{'mac':'680947485628','count':1}})))
+        self.assertEqual((json.loads(bridge.dataJson).get('frame') or {}).get('source'),'music-local','status must not blank a fresh local frame')
+        with patch.object(bridge,'executor') as executor:
+            bridge.refresh()
+            executor.submit.assert_not_called()
+        bridge.generation+=1
+        old=bridge.dataJson;bridge.refresh_local_frame();self.assertEqual(bridge.dataJson,old)
+
     def test_native_preview_does_not_make_controls_busy_or_starve_full_status(self):
         import desktop
         class Model:

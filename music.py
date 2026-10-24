@@ -52,6 +52,7 @@ class Renderer:
         self.pulse.process(self.analyzer.bass,self.analyzer.gate,now,prefs.get('music_repeat_ms',1000),getattr(self.analyzer,'rms',0)*.8)
 
     def features(self,rms,bass,prefs,now=None):
+        if not all(math.isfinite(v) and 0<=v<=1 for v in (rms,bass)):raise ValueError('Invalid audio features')
         now=time.monotonic() if now is None else now
         last=getattr(self,'feature_time',None)
         elapsed=1/60 if last is None else now-last
