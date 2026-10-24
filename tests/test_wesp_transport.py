@@ -67,6 +67,38 @@ class TransportTests(unittest.TestCase):
         import effects_config,layout
         return effects_config.from_preferences({'controller':{'count':2},'sections':layout.legacy(2)})
 
+    def test_realtime_audio_uses_udp_without_waiting_for_control_lock(self):
+        import realtime_protocol as rt,time
+        udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);udp.bind(('127.0.0.1',0));udp.settimeout(.5);self.addCleanup(udp.close)
+        stored={};key=b'x'*32;sid=b'12345678'
+        def respond(request,reply):
+            reply['capabilities']={'native_effects':True,'realtime_audio':True}
+            if request['op']=='effects_configure':stored['effects']=request['effects']
+            if request['op']=='hello':reply.update(stored)
+            if request['op']=='audio_open':reply['audio_stream']=dict(id=sid.hex(),key=key.hex(),port=udp.getsockname()[1],clock_ms=1000)
+            if request['op']=='audio_clock':reply['audio_clock_ms']=1000
+        device,peer=self.device(respond);device.udp_port=udp.getsockname()[1];device.query({'on':True})
+        self.assertTrue(device.prepare_realtime(self.fx_config()))
+        count=len(peer.requests);locked=threading.Event();release=threading.Event()
+        def block_control():
+            with device.query_lock:locked.set();release.wait(2)
+        thread=threading.Thread(target=block_control);thread.start();self.addCleanup(release.set);locked.wait(1)
+        started=time.monotonic();self.assertTrue(device.send_realtime(MAC,2,rt.now_ns(),12000,4000));self.assertLess(time.monotonic()-started,.1)
+        packet,_=udp.recvfrom(100);self.assertEqual(len(packet),40);self.assertEqual(rt.unpack_audio(packet,key,sid)[2:],(12000,4000))
+        self.assertEqual(len(peer.requests),count,'audio must not perform a TCP operation')
+        self.assertFalse(device.send_realtime('a0b7652d2050',2,rt.now_ns(),22000,4000))
+        self.assertFalse(device.send_realtime(MAC,3,rt.now_ns(),22000,4000))
+        self.assertFalse(device.send_realtime(MAC,2,rt.now_ns()-200_000_000,22000,4000))
+        release.set();thread.join(1)
+        palette=[[10,20,30]]*10
+        device.prepare_realtime(self.fx_config(),palette)
+        self.assertEqual(peer.requests[-1]['op'],'palette')
+        before_palette=len(peer.requests);device.prepare_realtime(self.fx_config(),palette)
+        self.assertEqual(len(peer.requests),before_palette,'unchanged transient palette must not repeat')
+        device.query({'on':False})
+        self.assertFalse(device.send_realtime(MAC,2,rt.now_ns(),22000,4000))
+        self.assertNotIn(key.hex(),json.dumps(device.document))
+
     def test_native_audio_sends_raw_features_and_config_once_without_rgb_frames(self):
         device,peer=self.effects_peer();device.query({'on':True})
         peer.requests.clear()

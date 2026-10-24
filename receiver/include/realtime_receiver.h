@@ -15,6 +15,8 @@ class RealtimeReceiver {
   IPAddress peer;
   mbedtls_md_context_t auth;
   uint32_t appliedAt=0,sampleStamp=0;
+  uint8_t overridePalette[10][3]{};
+  bool paletteSet=false,palettePending=false;
 public:
   FastAudioPolicy policy;
   uint32_t received=0,paintDelayMax=0,authUsMax=0;
@@ -22,18 +24,24 @@ public:
   RealtimeReceiver() { mbedtls_md_init(&auth); }
   void start() { if (!started) started=udp.begin(19448); }
   void revoke() {
-    policy.revoke();pendingPaint=false;
+    policy.revoke();pendingPaint=false;paletteSet=palettePending=false;
     memset(key,0,sizeof(key));memset(sid,0,sizeof(sid));session[0]=revision[0]=0;
     if (authReady) { mbedtls_md_free(&auth);mbedtls_md_init(&auth);authReady=false; }
   }
   bool open(Core &core,const char *owner,const char *rev,IPAddress address) {
-    if (!started || !core.on || !validSession(owner) || !core.effectRevision(rev)) return false;
+    if (!started || !core.canAudio(Transport::TCP,millis(),owner,rev)) return false;
     revoke();esp_fill_random(key,sizeof(key));esp_fill_random(sid,sizeof(sid));
     const mbedtls_md_info_t *md=mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    if (!md || mbedtls_md_setup(&auth,md,1)) return false;
+    if (!md || mbedtls_md_setup(&auth,md,1)) { mbedtls_md_free(&auth);mbedtls_md_init(&auth);return false; }
     authReady=true;
     if (mbedtls_md_hmac_starts(&auth,key,sizeof(key))) { revoke();return false; }
     memcpy(session,owner,17);memcpy(revision,rev,17);peer=address;policy.open(sid);return true;
+  }
+  bool palette(Core &core,const char *owner,const char *rev,const uint8_t colors[10][3]) {
+    if (!policy.active || !core.on || !owner || !rev || strcmp(owner,session) || strcmp(rev,revision)) return false;
+    memcpy(overridePalette,colors,sizeof(overridePalette));paletteSet=palettePending=true;
+    if (core.effects.mode==FxMode::Music) { memcpy(core.effects.palette,colors,sizeof(overridePalette));palettePending=false; }
+    return true; // A prepared grant may receive its palette before its first input.
   }
   void grant(cJSON *reply) const {
     if (!policy.active) return;
@@ -81,7 +89,11 @@ public:
     }
     if (have) {
       uint32_t now=millis();
+      bool music=core.effects.mode==FxMode::Music;
       if (!core.audio(newest.rms/65535.f,newest.bass/65535.f,Transport::TCP,now,session,revision)) { revoke();return; }
+      if (paletteSet && (palettePending || !music)) {
+        memcpy(core.effects.palette,overridePalette,sizeof(overridePalette));palettePending=false;
+      }
       appliedAt=now;sampleStamp=newest.stamp;pendingPaint=true;
     }
   }

@@ -74,4 +74,7 @@ int main() {
   Core fastTick;assert(fastTick.configure(&out,1,500));c=config();assert(fastTick.configureEffects(c));fastTick.on=true;
   assert(fastTick.audio(.2f,.2f,Transport::TCP,100,session,rev));assert(fastTick.tick(100));
   assert(fastTick.tick(110)); // active native effects paint at10ms rather than20ms
+  assert(fastTick.canAudio(Transport::TCP,111,session,rev));
+  assert(!fastTick.canAudio(Transport::USB,111,"1111111111111111",rev));
+  assert(fastTick.lastFrame==100); // opening a data grant must not renew a lease
 }

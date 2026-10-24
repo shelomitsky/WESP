@@ -159,6 +159,10 @@ public:
     effectsReady=true;return true;
   }
   bool effectRevision(const char *revision) const { return effectsReady && revision && !strcmp(revision,effects.config.revision); }
+  bool canAudio(Transport transport,uint32_t now,const char *session,const char *revision) const {
+    return on && validSession(session) && effectRevision(revision) &&
+      (owner==Transport::None || sameOwner(transport,session) || uint32_t(now-lastFrame)>=leaseMs());
+  }
   bool audio(float rms,float bass,Transport transport,uint32_t now,const char *session,const char *revision) {
     if (!effectRevision(revision) || !isfinite(rms) || !isfinite(bass) || rms<0 || rms>1 || bass<0 || bass>1 || !claim(transport,now,session)) return false;
     hasFrame=false;effects.audio(rms,bass,now);return true;

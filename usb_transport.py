@@ -349,6 +349,7 @@ def serve():
     stop = threading.Event()
     wake = threading.Event()
     calibration = [None]
+    audio=None
 
     def cancel_calibration(blank=True):
         lease=calibration[0]
@@ -620,6 +621,9 @@ def serve():
                                 native_request(device,{'action':'apply','color':color,'notification':None,'clear_ref':'0000000000000000'},current)
                         delay=(.05 if calibration[0] else device.refresh_interval() if hasattr(device,'refresh_interval')
                                else .25 if hasattr(device,'maintain') else 1)
+                    if audio is not None:
+                        audio.prepare(control.settings(),control.runtime(),calibration[0] is not None)
+                        if device is not None and hasattr(device,'supports_realtime') and device.supports_realtime():delay=min(delay,.05)
             except Exception:
                 with device_lock:
                     cancel_calibration(blank=False)
@@ -644,6 +648,9 @@ def serve():
         server.timeout = .2
         import receiver_setup as setup_module
         bridge=setup_module.Bridge(path.parent,receiver_setup)
+        from realtime_owner import RealtimeOwner
+        audio=RealtimeOwner(path.parent,lambda:device)
+        audio.start()
         poller = threading.Thread(target=refresh, daemon=True)
         poller.start()
         try:
@@ -652,6 +659,7 @@ def serve():
         finally:
             stop.set()
             bridge.close()
+            audio.close()
             # Join request threads before closing/reconfiguring their Device.
             server.server_close()
             poller.join(timeout=5)

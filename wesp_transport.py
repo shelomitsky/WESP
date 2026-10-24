@@ -114,6 +114,7 @@ def validate_outputs(outputs, max_milliamps):
 
 class Device:
     tcp_port = 19447
+    udp_port = 19448
     timeout = 2.0
 
     def __init__(self, port=None, baud=921600, expected_mac=None, led_count=None,
@@ -139,6 +140,10 @@ class Device:
         self.updated = 0
         self.sequence = self.reply_sequence = self.frame_sequence = 0
         self.last_exchange = {}
+        self.fast_lock=threading.RLock()
+        self.fast=None
+        self.fast_retry_ns=0
+        self.fast_stats=dict(sent=0,bytes=0,suppressed=0,dropped=0,max_source_age_ms=0)
         self.last_frame = None
         self.last_scene = None
         self.last_event_ref = {}
@@ -167,6 +172,7 @@ class Device:
             raise ValueError('WESP LED count changed; check configuration and reconnect')
 
     def _disconnect(self):
+        self.revoke_realtime()
         for transport in (self.serial, self.sock):
             if transport is not None:
                 transport.close()
@@ -253,13 +259,13 @@ class Device:
                     raise ValueError('WESP rejected the request')
                 if type(reply.get('on')) is not bool or type(reply.get('bri')) is not int or not 0 <= reply['bri'] <= 255:
                     raise ValueError('Invalid WESP state response')
-                allowed=('mac','proto','count','firmware','version','outputs','max_milliamps','wifi','capabilities','effects','ota_trial','build_sha256','on','bri','color','watchdog_ms')
+                allowed=('mac','proto','count','firmware','version','outputs','max_milliamps','wifi','capabilities','effects','ota_trial','build_sha256','audio_stats','on','bri','color','watchdog_ms')
                 previous={} if op=='hello' else self.document or {}
                 self.document={key:copy.deepcopy(previous[key]) for key in allowed if key in previous}
                 self.document.update({key:copy.deepcopy(reply[key]) for key in allowed if key in reply})
                 if 'capabilities' in reply:
                     caps=reply['capabilities']
-                    self.document['capabilities']={key:caps.get(key) is True for key in ('wifi_configure','native_effects','ota','preview') if isinstance(caps,dict) and key in caps}
+                    self.document['capabilities']={key:caps.get(key) is True for key in ('wifi_configure','native_effects','realtime_audio','ota','preview') if isinstance(caps,dict) and key in caps}
                     if isinstance(caps,dict) and type(caps.get('max_presets')) is int and 1<=caps['max_presets']<=8:
                         self.document['capabilities']['max_presets']=caps['max_presets']
                 if 'effects' in reply:
@@ -353,7 +359,9 @@ class Device:
                     if not isinstance(colors, list) or not colors:
                         raise ValueError('Invalid WESP color')
                     fields['color'] = _rgb(colors[0])
+        if payload and payload.get('on') is False:self.revoke_realtime()
         with self.query_lock:
+            if payload is None and self.realtime_active():return self._state()
             if payload is None and self.last_scene and self.native_effects():
                 interval=(self.last_scene['config']['wallpaper_timeout_ms']*.000875 if self.last_scene['mode']!='music' else .25)
                 if time.monotonic()-self.updated<interval:
@@ -385,6 +393,7 @@ class Device:
             self.connect()
             if not self.document['on']:
                 return False
+            self.revoke_realtime()
             self._run('frame', dict(count=self.led_count, pixels=base64.b64encode(raw).decode('ascii')))
             self.last_frame = raw
             self.last_scene = None
@@ -419,6 +428,91 @@ class Device:
                 return max(.001,min(.25,due-time.monotonic()))
             return .25
 
+    def supports_realtime(self):
+        return self.connection=='wifi' and bool(self.document and self.document.get('capabilities',{}).get('realtime_audio'))
+
+    def revoke_realtime(self):
+        with self.fast_lock:
+            previous,self.fast=self.fast,None
+            if previous is not None:previous['socket'].close()
+
+    def realtime_active(self):
+        import realtime_protocol as rt
+        with self.fast_lock:
+            return bool(self.fast and self.fast['clock'].valid(rt.now_ns()))
+
+    def realtime_palette(self,colors,config):
+        if colors is None and self.last_palette is None:return
+        import effects_config
+        palette=(effects_config.colors(colors) if colors is not None else
+            next(p['colors'] for p in config['presets'] if p['id']==config['active']))
+        if palette==self.last_palette:return
+        self._run('palette',{'revision':config['revision'],'colors':palette})
+        self.last_palette=palette if colors is not None else None
+
+    def prepare_realtime(self,config,colors=None):
+        import realtime_protocol as rt
+        with self.query_lock:
+            self.connect()
+            if not self.supports_realtime() or not self.document.get('on'):
+                self.revoke_realtime();return False
+            self.effects_configure(config)
+            with self.fast_lock:current=self.fast
+            if current and current['revision']==config['revision'] and current['session']==self.session:
+                self.realtime_palette(colors,config)
+                now=rt.now_ns()
+                if now-current['clock'].received_ns<5_000_000_000:return True
+                if now-current.get('sync_attempt_ns',0)<1_000_000_000:return current['clock'].valid(now)
+                current['sync_attempt_ns']=now
+                sent=rt.now_ns();reply=self._run('audio_clock');received=rt.now_ns()
+                with self.fast_lock:
+                    if self.fast is current:current['clock'].sync(sent,received,reply.get('audio_clock_ms'))
+                return self.realtime_active()
+            if rt.now_ns()<self.fast_retry_ns:return False
+            self.fast_retry_ns=rt.now_ns()+1_000_000_000
+            sent=rt.now_ns();reply=self._run('audio_open',{'revision':config['revision']});received=rt.now_ns()
+            value=reply.get('audio_stream',{})
+            if (not isinstance(value,dict) or not isinstance(value.get('id'),str) or not re.fullmatch('[0-9a-f]{16}',value['id'])
+                    or not isinstance(value.get('key'),str) or not re.fullmatch('[0-9a-f]{64}',value['key']) or value.get('port')!=self.udp_port):
+                raise ValueError('Invalid real-time audio grant')
+            clock=rt.AudioClock()
+            if not clock.sync(sent,received,value.get('clock_ms')):return False
+            udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);udp.setblocking(False)
+            target=(self.sock.getpeername()[0],self.udp_port)
+            self.last_palette=None
+            try:self.realtime_palette(colors,config)
+            except Exception:udp.close();raise
+            with self.fast_lock:
+                self.revoke_realtime()
+                self.fast=dict(socket=udp,target=target,key=bytes.fromhex(value['key']),sid=bytes.fromhex(value['id']),
+                    sequence=0,clock=clock,delta=rt.DeltaPolicy(),revision=config['revision'],session=self.session)
+            self.fast_retry_ns=0
+            self.last_scene=dict(mode='music',config=copy.deepcopy(config),updated=time.monotonic())
+            self.last_frame=None
+            return True
+
+    def send_realtime(self,mac,count,captured_ns,rms,bass):
+        import realtime_protocol as rt
+        with self.fast_lock:
+            context=self.fast
+            if (not context or mac!=self.expected_mac or count!=self.led_count or not self.document
+                    or not self.document.get('on') or context['session']!=self.session):return False
+            now=rt.now_ns()
+            try:stamp=context['clock'].stamp(captured_ns,now)
+            except ValueError:self.fast_stats['dropped']+=1;return False
+            if not context['delta'].eligible(rms,bass,now):self.fast_stats['suppressed']+=1;return False
+            sequence=context['sequence']+1
+            if sequence>0x7fffffff:self.revoke_realtime();return False
+            packet=rt.pack_audio(context['key'],context['sid'],sequence,stamp,rms,bass)
+            try:
+                if context['socket'].sendto(packet,context['target'])!=rt.PACKET_SIZE:raise OSError('Incomplete audio datagram')
+            except OSError:self.fast_stats['dropped']+=1;return False
+            context['sequence']=sequence;context['delta'].sent(rms,bass,now)
+            self.fast_stats['sent']+=1;self.fast_stats['bytes']+=len(packet)
+            self.fast_stats['max_source_age_ms']=max(self.fast_stats['max_source_age_ms'],(now-captured_ns)/1e6)
+            self.audio_sequence+=1
+            return True
+
     def native_effects(self):
         return bool(self.document and self.document.get('capabilities',{}).get('native_effects'))
 
@@ -430,6 +524,7 @@ class Device:
             self.connect()
             if not self.native_effects():raise ValueError('Update native firmware to enable local effects')
             if self.document.get('effects')==clean:return clean
+            self.revoke_realtime()
             self._run('effects_configure',{'effects':clean})
             actual=self.setup_status().get('effects')
             if actual!=clean:raise ConfigurationError('configuration_unconfirmed','Native effects configuration read-back failed')
@@ -444,6 +539,7 @@ class Device:
             self.connect()
             if not self.document['on']:return False
             self.effects_configure(config)
+            self.revoke_realtime()
             self._run('audio',dict(rms=rms,bass=bass,revision=config['revision']))
             self.last_scene=dict(mode='music',config=copy.deepcopy(config),rms=rms,bass=bass,updated=time.monotonic())
             self.last_frame=None;self.audio_sequence+=1
@@ -462,6 +558,7 @@ class Device:
             if not self.document['on']:return False
             self.effects_configure(config)
             if self.last_scene and self.last_scene['mode']==mode and self.last_scene.get('color')==color:return True
+            self.revoke_realtime()
             sent_at=time.monotonic()
             self._run('effect',dict(mode=mode,color=color,revision=config['revision']))
             self.color=list(color)
@@ -583,7 +680,7 @@ class Device:
             finally:
                 self.discover=previous_discover
             result = {key: copy.deepcopy(self.document[key]) for key in
-                      ('mac', 'count', 'outputs', 'max_milliamps', 'wifi', 'capabilities', 'effects', 'ota_trial', 'build_sha256', 'firmware', 'version', 'watchdog_ms')
+                      ('mac', 'count', 'outputs', 'max_milliamps', 'wifi', 'capabilities', 'effects', 'ota_trial', 'build_sha256', 'audio_stats', 'firmware', 'version', 'watchdog_ms')
                       if key in self.document}
             result['connection'] = self.connection
             return result
@@ -597,6 +694,7 @@ class Device:
                         target_baud=self.baud, fallback=False, mac=self.expected_mac,
                         reply_sequence=self.reply_sequence, frame_sequence=self.frame_sequence,
                         audio_sequence=self.audio_sequence,
+                        realtime=self.fast_stats.copy(),
                         last_reply_age=round(time.monotonic()-self.updated, 3),
                         last_exchange=self.last_exchange.copy())
 

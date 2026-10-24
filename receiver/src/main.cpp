@@ -363,7 +363,8 @@ void process(const char *line,Transport transport) {
     else if (!strcmp(op,"palette")) {
       const cJSON *colors=field(request,"colors");uint8_t next[10][3]{};bool valid=cJSON_IsArray(colors) && cJSON_GetArraySize(colors)==10;
       for (int i=0;valid && i<10;++i) valid=fxRgb(cJSON_GetArrayItem(colors,i),next[i]);
-      if (!valid || !core.setPalette(next,transport,requestedSession,stringField(request,"revision"))) error="invalid_palette";
+      if (!valid || !(realtime.palette(core,requestedSession,stringField(request,"revision"),next) ||
+          core.setPalette(next,transport,requestedSession,stringField(request,"revision")))) error="invalid_palette";
     }
     else if (!strcmp(op,"pair")) {
       if (transport!=Transport::USB) error="usb_only";
