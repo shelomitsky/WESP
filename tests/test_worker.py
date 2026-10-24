@@ -309,6 +309,8 @@ class CaptureContinuityTest(unittest.TestCase):
     def test_audio_stream_uses_wesp_brand(self):
         spawn,_=self.exercise()
         self.assertIn('--client-name=WESP Audio',spawn.call_args.args[0])
+        self.assertIn('--property=node.virtual=true',spawn.call_args.args[0])
+        self.assertIn('--property=stream.monitor=true',spawn.call_args.args[0])
 
 
 class DemoCaptureContinuityTest(unittest.TestCase):
@@ -342,3 +344,5 @@ class DemoCaptureContinuityTest(unittest.TestCase):
              patch.object(desktop_bridge.subprocess,'Popen',return_value=Capture()) as spawn:
             demo.run()
         self.assertEqual(spawn.call_count,1)
+        self.assertIn('--property=node.virtual=true',spawn.call_args.args[0])
+        self.assertIn('--property=stream.monitor=true',spawn.call_args.args[0])

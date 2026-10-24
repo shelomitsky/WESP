@@ -184,7 +184,8 @@ def run():
                     'parec', '--device='+source, '--raw',
                     '--format=float32le', '--rate=48000', '--channels=1',
                     f'--latency-msec={capture_ms}', '--client-name=WESP Audio', '--stream-name=Desktop output monitor',
-                    '--property=media.role=music', '--property=application.icon_name=wled-control'],
+                    '--property=media.role=music', '--property=application.icon_name=wled-control',
+                    '--property=node.virtual=true', '--property=stream.monitor=true'],
                     stdout=subprocess.PIPE)
                 os.set_blocking(proc.stdout.fileno(), False)
                 analyzer = Spectrum()

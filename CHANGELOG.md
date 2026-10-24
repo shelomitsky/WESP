@@ -1,3 +1,11 @@
+# 0.2.0-alpha.13 (candidate)
+
+- Mark output-monitor capture as a virtual monitor stream on PipeWire, including
+  demo capture. KDE can then omit WESP from its microphone-use indicator while
+  microphone recording by other applications keeps its normal indication.
+- This changes stream classification only; no system privacy/tray settings or
+  microphone permissions are changed. Other desktops may classify it differently.
+
 # 0.2.0-alpha.12 (candidate)
 
 - Keep desktop-output capture alive while the output is unchanged. Follow actual
