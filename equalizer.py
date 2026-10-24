@@ -2,6 +2,7 @@
 """Desktop output -> synchronized USB level meters. Audio stays in memory."""
 from i18n import tr
 import logging
+import math
 import os
 import selectors
 import signal
@@ -10,6 +11,7 @@ import time
 
 import numpy as np
 import control
+from audio_source import OutputMonitor,capture_command
 
 LOG = logging.getLogger('wled-equalizer')
 RATE, SIZE, FPS = 48000, 2048, 15
@@ -53,6 +55,23 @@ class Spectrum:
         return np.rint(self.level * 255).astype(int).tolist()
 
 
+class AudioFeatures:
+    """Raw source features only; native ESP owns gain, gate and envelopes."""
+    def __init__(self):
+        self.window=np.hanning(SIZE)
+        hz=np.fft.rfftfreq(SIZE,1/RATE);self.low=(hz>=40)&(hz<180)
+        self.scale=self.window.sum()/2
+
+    def process(self,samples,fast=False):
+        samples=np.asarray(samples,dtype=float)
+        if samples.shape!=(SIZE,) or not np.isfinite(samples).all():raise ValueError('Expected finite mono audio')
+        centered=samples-samples.mean()
+        spectrum=np.abs(np.fft.rfft(centered*self.window))/self.scale
+        rms_window=samples[-480:] if fast else samples
+        rms_window=rms_window-rms_window.mean()
+        return dict(rms=min(1.,float(np.sqrt(np.mean(rms_window**2)))),bass=min(1.,float(np.sqrt(np.sum(spectrum[self.low]**2)))))
+
+
 class SpatialSpectrum:
     """One continuous bass/level meter repeated on both ten-pixel strips."""
     COLORS = np.array([[0,180,130], [0,205,95], [0,225,55], [45,240,10],
@@ -71,6 +90,7 @@ class SpatialSpectrum:
         self.hz = np.fft.rfftfreq(SIZE, 1/RATE)
         self.level = 0.0
         self.reference = .1
+        self.bass = 0.0
         self.set_response(100,6)
 
     def set_response(self,sensitivity,gate):
@@ -94,7 +114,14 @@ class SpatialSpectrum:
         centered = samples-samples.mean()
         fft = np.abs(np.fft.rfft(centered*self.window)) / (self.window.sum()/2)
         bass = np.sqrt(np.sum(fft[(self.hz >= 40) & (self.hz < 180)]**2))
-        rms = np.sqrt(np.mean(centered**2))
+        rms = float(np.sqrt(np.mean(centered**2)))
+        return self.features(rms,float(bass))
+
+    def features(self,rms,bass,elapsed=1/60):
+        if (not all(math.isfinite(v) for v in (rms,bass,elapsed)) or rms<0
+                or bass<0 or not 0<=elapsed<=2):raise ValueError('Invalid audio features')
+        self.bass,self.rms=bass,rms
+        cadence=elapsed*USB_FPS
         # Track the recent programme level, independently of the PC's volume.
         # Headroom prevents loud/compressed tracks from pinning the whole bar.
         # Do not learn from silence: the noise gate must not be amplified.
@@ -103,15 +130,15 @@ class SpatialSpectrum:
             target = 0.0
         else:
             rate = .08 if drive > self.reference else .006
-            self.reference += (drive-self.reference)*rate
+            self.reference += (drive-self.reference)*(1-(1-rate)**cadence)
             self.reference = max(.02, self.reference)
             if abs(drive-self.reference) < self.reference*.01:
                 self.reference = max(.02, drive)
             target = float(np.clip(drive/(self.reference*1.4)*self.sensitivity, 0, 1)**1.1)
         if target > self.level:
-            self.level += (target-self.level)*self.attack
+            self.level += (target-self.level)*(1-(1-self.attack)**cadence)
         else:
-            self.level = max(target, self.level*self.release)
+            self.level = max(target, self.level*self.release**cadence)
         if self.level < .02:
             self.level = 0.0
         height = self.level*10
@@ -138,7 +165,14 @@ def run():
     signal.signal(signal.SIGINT, stop)
     # Keep auto-gain history while reopening the capture on output switches.
     # Otherwise sensitivity would jump back to its initial value every 15s.
-    spatial = SpatialSpectrum(os.environ.get('WLED_EQ_PROFILE', 'fast'))
+    import music
+    renderer=music.Renderer(os.environ.get('WLED_EQ_PROFILE','fast'))
+    spatial=renderer.analyzer
+    feature_source=AudioFeatures()
+    native=False;capability_checked=0;network_retry_at=0
+    monitor=None
+    import realtime_producer
+    hint=realtime_producer.CapabilityHint(control.RUNTIME)
     capture_ms = PROFILES[spatial.profile]['capture_ms']
     LOG.info('Equalizer profile=%s, requested capture=%sms, USB FPS=%s',
              spatial.profile, capture_ms, USB_FPS)
@@ -148,17 +182,19 @@ def run():
             try:
                 prefs, mem = control.settings(), control.runtime()
                 if not prefs['equalizer'] or mem['suspended']:
+                    if monitor is not None:monitor.close();monitor=None
                     restore()
                     status(tr("Paused") if mem['suspended'] else tr("Disabled"))
                     time.sleep(.3)
                     continue
-                # Only the output monitor; never a microphone. Reopen periodically
-                # so changes to the default output device are picked up.
-                proc = subprocess.Popen([
-                    'parec', '--device=@DEFAULT_MONITOR@', '--raw',
-                    '--format=float32le', '--rate=48000', '--channels=1',
-                    f'--latency-msec={capture_ms}', '--client-name=WLED Equalizer'],
-                    stdout=subprocess.PIPE)
+                if hint.supported(prefs):
+                    if monitor is not None:monitor.close();monitor=None
+                    realtime_producer.run(hint,lambda:stopping,status,lambda samples:feature_source.process(samples,fast=True))
+                    continue
+                # Keep one stream until the default OUTPUT actually changes.
+                if monitor is None:monitor=OutputMonitor()
+                source=monitor.source
+                proc = subprocess.Popen(capture_command(source,capture_ms,'WESP Audio'),stdout=subprocess.PIPE)
                 os.set_blocking(proc.stdout.fileno(), False)
                 analyzer = Spectrum()
                 usb = os.environ.get('WLED_TRANSPORT', prefs.get('transport', 'usb')) == 'usb'
@@ -167,7 +203,7 @@ def run():
                 pending = bytearray()
                 next_frame = time.monotonic()
                 have_audio = False
-                opened = last_audio = time.monotonic()
+                last_audio = time.monotonic()
                 last_status = 0
                 with selectors.DefaultSelector() as selector:
                     selector.register(proc.stdout, selectors.EVENT_READ)
@@ -175,7 +211,7 @@ def run():
                         prefs, mem = control.settings(), control.runtime()
                         if not prefs['equalizer'] or mem['suspended']:
                             break
-                        if time.monotonic() - opened > 15:
+                        if monitor.source != source or hint.supported(prefs):
                             break
                         wait = min(.2, max(0, next_frame-time.monotonic())) if have_audio else .2
                         if selector.select(wait):
@@ -199,27 +235,50 @@ def run():
                         # Render on a timer, independent of audio batch sizes.
                         # If the source stops sending, fade instead of holding a peak.
                         samples = history if time.monotonic()-last_audio < .1 else np.zeros(SIZE)
-                        rgb = analyzer.process(samples)
-                        if usb:
-                            spatial.set_decay(prefs.get('equalizer_decay_ms', 250))
-                            spatial.set_response(prefs.get('equalizer_sensitivity',100),prefs.get('equalizer_gate',6))
-                            spatial.set_attack(prefs.get('equalizer_attack_ms',0))
-                        pixels = spatial.process(samples) if usb else None
-                        with control.locked():
-                            prefs, mem = control.settings(), control.runtime()
-                            if pixels is not None:
-                                if prefs.get('controller') and prefs.get('sections'):
-                                    import layout
-                                    colors=None
-                                    if prefs.get('equalizer_palette')=='wallpaper':
-                                        import wallpaper
-                                        colors=wallpaper.cached(control.RUNTIME)['colors']
-                                    pixels=layout.meter(spatial.level,prefs['sections'],prefs['controller']['count'],
-                                                        palette=prefs.get('equalizer_palette','classic'),colors=colors)
-                                else:
-                                    pixels = orient_pixels(pixels, prefs.get('reverse_first', False),
-                                                           prefs.get('reverse_second', False))
-                            active = control.equalizer_frame(prefs, mem, rgb, pixels=pixels)
+                        if time.monotonic()<network_retry_at:
+                            next_frame=time.monotonic()+.05
+                            continue
+                        try:
+                            if usb and (prefs.get('controller') or {}).get('backend')=='wesp' and time.monotonic()-capability_checked>=1:
+                                import usb_transport
+                                native=usb_transport.client(native={'action':'capabilities'}) is True
+                                capability_checked=time.monotonic()
+                            elif (prefs.get('controller') or {}).get('backend')!='wesp':native=False
+                            fps=20 if native else USB_FPS if usb else FPS
+                            features=feature_source.process(samples) if native else None
+                            rgb = None if native else analyzer.process(samples)
+                            if usb and not native:
+                                renderer.analyze(samples,prefs)
+                            pixels = [] if usb and not native else None
+                            colors=None
+                            if native and prefs.get('equalizer_palette')=='wallpaper':
+                                import wallpaper
+                                colors=wallpaper.cached(control.RUNTIME)['colors']
+                            with control.locked():
+                                prefs, mem = control.settings(), control.runtime()
+                                if pixels is not None:
+                                    if prefs.get('controller') and prefs.get('sections'):
+                                        import layout
+                                        colors=None
+                                        if prefs.get('equalizer_palette')=='wallpaper':
+                                            import wallpaper
+                                            colors=wallpaper.cached(control.RUNTIME)['colors']
+                                        pixels=renderer.pixels(prefs,prefs['sections'],prefs['controller']['count'],colors=colors)
+                                    else:
+                                        import layout
+                                        sections=layout.legacy(20,prefs.get('reverse_first',False),prefs.get('reverse_second',False))
+                                        pixels=renderer.pixels(prefs,sections,20)
+                                was_native=mem.get('nativeEffects',False)
+                                active = (control.equalizer_frame(prefs,mem,rgb,features=features,colors=colors) if native
+                                          else control.equalizer_frame(prefs,mem,rgb,pixels=pixels))
+                                if native and not was_native and mem.get('nativeEffects'):
+                                    control.write_json(control.RUNTIME/'state.json',mem)
+                        except Exception:
+                            LOG.exception('Receiver unavailable; keeping desktop audio capture')
+                            status(tr('Receiver unavailable — audio capture remains active'))
+                            network_retry_at=time.monotonic()+.5
+                            next_frame=time.monotonic()+.05
+                            continue
                         # Advance against the previous deadline; from-now pacing
                         # would skip every second audio block under minor jitter.
                         now = time.monotonic()
@@ -228,7 +287,8 @@ def run():
                             next_frame = now + 1/fps  # skip missed deadlines, no burst
                         if time.monotonic() - last_status > 1:
                             mode = tr("fast response") if spatial.profile == 'fast' else tr("smooth response")
-                            status((tr('USB · %1 · up to 60 FPS',mode) if usb else tr("Reacting to music")) if active else tr("Waiting for lighting to turn on or the volume indicator to finish"))
+                            status((tr('Music and signals are rendered on the ESP.') if native else
+                                    tr('USB · %1 · up to 60 FPS',mode) if usb else tr("Reacting to music")) if active else tr("Waiting for lighting to turn on or the volume indicator to finish"))
                             last_status = time.monotonic()
                         if not active:
                             time.sleep(.1)
@@ -253,6 +313,7 @@ def run():
                         proc.wait()
                     proc.stdout.close()
     finally:
+        if monitor is not None:monitor.close()
         restore()
 
 

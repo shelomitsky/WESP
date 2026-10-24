@@ -497,3 +497,609 @@ msgstr "быстрый отклик"
 
 msgid "smooth response"
 msgstr "плавный отклик"
+
+msgid "Could not restore controller settings; backups: %1; files: %2"
+msgstr "Не удалось восстановить настройки контроллера; резервные копии: %1; файлы: %2"
+
+msgid "A controller installation is already running"
+msgstr "Установка контроллера уже выполняется"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "Checking the selected ESP…"
+msgstr "Проверка выбранной ESP…"
+
+msgid "Could not check who is using the USB port"
+msgstr "Не удалось проверить, кто использует USB-порт"
+
+msgid "Could not restart WESP services"
+msgstr "Не удалось запустить службы WESP"
+
+msgid "Downloading verified WLED firmware…"
+msgstr "Загрузка проверенной прошивки WLED…"
+
+msgid "ESP32 · %1 · %2\nWLED %3\nOriginal firmware saved to: %4"
+msgstr "ESP32 · %1 · %2\nWLED %3\nИсходная прошивка сохранена: %4"
+
+msgid "File verification failed. Nothing has been written"
+msgstr "Проверка файла не пройдена. Запись не выполнялась"
+
+msgid "Install WLED"
+msgstr "Установить WLED"
+
+msgid "Install WLED on a new ESP"
+msgstr "Установить WLED на новую ESP"
+
+msgid "Installation can only be cancelled before writing starts"
+msgstr "Установку можно отменить только до начала записи"
+
+msgid "Installation failed: %1\nBackup: %2"
+msgstr "Установка не завершена: %1\nРезервная копия: %2"
+
+msgid "Installation was interrupted. The backup has been retained"
+msgstr "Установка прервана. Резервная копия сохранена"
+
+msgid "Installing WLED. Keep the USB cable connected…"
+msgstr "Установка WLED. Не отключайте USB-кабель…"
+
+msgid "Only an unencrypted classic ESP32 with 4 MB flash is supported"
+msgstr "Поддерживается только обычная ESP32 с 4 МБ памяти без шифрования"
+
+msgid "Prepare the board before confirming installation"
+msgstr "Подготовьте плату перед подтверждением установки"
+
+msgid "Preparing the installer…"
+msgstr "Подготовка установщика…"
+
+msgid "Replace the firmware and erase all settings on this ESP"
+msgstr "Заменить прошивку и удалить все настройки на этой ESP"
+
+msgid "Saving the original firmware: %1%. This may take several minutes."
+msgstr "Сохранение исходной прошивки: %1%. Это может занять несколько минут."
+
+msgid "Starting the installer…"
+msgstr "Запуск установщика…"
+
+msgid "The USB controller changed. Prepare the selected board again"
+msgstr "USB-контроллер изменился. Повторите подготовку выбранной платы"
+
+msgid "The USB port is used by another application. Close it and try again"
+msgstr "USB-порт занят другим приложением. Закройте его и повторите попытку"
+
+msgid "The backup is incomplete. Nothing has been written"
+msgstr "Резервная копия неполная. Запись не выполнялась"
+
+msgid "The firmware image does not fit this board"
+msgstr "Образ прошивки не подходит по размеру для этой платы"
+
+msgid "The selected USB device is no longer connected"
+msgstr "Выбранное USB-устройство отключено"
+
+msgid "WLED installed. Connect the controller, then set up the LED outputs in WLED before attaching a strip."
+msgstr "WLED установлен. Подключите контроллер и настройте выходы в WLED перед подключением ленты."
+
+msgid "Add LED output"
+msgstr "Добавить выход ленты"
+
+msgid "Check Wi-Fi"
+msgstr "Проверить Wi-Fi"
+
+msgid "Could not configure the receiver. Check the USB connection, GPIOs and network settings."
+msgstr "Не удалось настроить контроллер. Проверьте USB-подключение, GPIO и параметры сети."
+
+msgid "ESP32 · %1 · %2\nFirmware %3\nOriginal firmware saved to: %4"
+msgstr "ESP32 · %1 · %2\nПрошивка %3\nИсходная прошивка сохранена: %4"
+
+msgid "Install WESP"
+msgstr "Установить WESP"
+
+msgid "Install WESP firmware (USB + Wi-Fi)"
+msgstr "Установить прошивку WESP (USB + Wi-Fi)"
+
+msgid "LED current limit, mA"
+msgstr "Лимит тока лент, мА"
+
+msgid "LEDs"
+msgstr "Диодов"
+
+msgid "Read WESP receiver"
+msgstr "Прочитать настройки ESP"
+
+msgid "Read the receiver over USB, configure the LED outputs and Wi-Fi, then verify Wi-Fi before disconnecting USB. No frames from the PC: lights off within 1.5 seconds."
+msgstr "Прочитайте настройки по USB, задайте выходы лент и сеть. Проверьте Wi-Fi перед отключением USB. Без кадров от ПК подсветка гаснет в течение 1,5 секунды."
+
+msgid "Remove output"
+msgstr "Удалить выход"
+
+msgid "Save outputs and network to ESP"
+msgstr "Сохранить выходы и сеть в ESP"
+
+msgid "Use Wi-Fi"
+msgstr "Работать по Wi-Fi"
+
+msgid "Using Wi-Fi"
+msgstr "Управление по Wi-Fi"
+
+msgid "Wi-Fi · LEDs: %1"
+msgstr "Wi-Fi · Светодиоды: %1"
+
+msgid "WESP receiver: outputs and Wi-Fi"
+msgstr "Контроллер WESP: выходы и Wi-Fi"
+
+msgid "Wi-Fi connected: %1"
+msgstr "Wi-Fi подключён: %1"
+
+msgid "Wi-Fi is not connected yet"
+msgstr "Wi-Fi пока не подключён"
+
+msgid "Wi-Fi network name (optional)"
+msgstr "Имя сети Wi-Fi (необязательно)"
+
+msgid "Wi-Fi password"
+msgstr "Пароль Wi-Fi"
+
+msgid "Installing WESP. Keep the USB cable connected…"
+msgstr "Установка WESP. Не отключайте USB-кабель…"
+
+msgid "WESP installed. Read the receiver above, then save its outputs and network."
+msgstr "WESP установлен. Прочитайте настройки контроллера выше, затем сохраните его выходы и сеть."
+
+msgid "The backup does not match the controller. Nothing has been written"
+msgstr "Копия не совпадает с памятью контроллера. Запись не выполнялась"
+
+msgid "Saving at a compatible USB speed: %1%. This may take about ten minutes."
+msgstr "Сохранение на совместимой скорости USB: %1%. Это может занять около десяти минут."
+
+msgid "Arrange your physical LED ranges and their directions."
+msgstr "Укажите участки лент и направление их подключения."
+
+msgid "Back to my device"
+msgstr "Вернуться к устройству"
+
+msgid "Calculated colors; actual delivery and power limits are separate."
+msgstr "Рассчитанные цвета. Доставка кадров и лимит питания проверяются отдельно."
+
+msgid "Clear signals"
+msgstr "Сбросить сигналы"
+
+msgid "Color"
+msgstr "Цвет"
+
+msgid "Connect an ESP or try the demo"
+msgstr "Подключите ESP или попробуйте деморежим"
+
+msgid "Connected over USB"
+msgstr "Подключено по USB"
+
+msgid "Connected over Wi-Fi"
+msgstr "Подключено по Wi-Fi"
+
+msgid "Connection"
+msgstr "Подключение"
+
+msgid "Custom"
+msgstr "Другое"
+
+msgid "Demo · desktop audio · no ESP commands"
+msgstr "Деморежим · звук компьютера · без команд ESP"
+
+msgid "Demo — your device is unchanged"
+msgstr "Деморежим — устройство работает как прежде"
+
+msgid "Desktop audio unavailable — retrying"
+msgstr "Звук компьютера недоступен — повторяем подключение"
+
+msgid "Desktop color"
+msgstr "Цвет рабочего стола"
+
+msgid "Desktop lighting"
+msgstr "Подсветка рабочего стола"
+
+msgid "Device and firmware"
+msgstr "Устройство и прошивка"
+
+msgid "Device unavailable"
+msgstr "Устройство недоступно"
+
+msgid "Finish installation"
+msgstr "Завершить установку"
+
+msgid "Host frame preview"
+msgstr "Предпросмотр рассчитанных кадров"
+
+msgid "Install firmware"
+msgstr "Установить прошивку"
+
+msgid "Install on a new ESP"
+msgstr "Установка на новую ESP"
+
+msgid "Leave demo mode to configure your device"
+msgstr "Выйдите из деморежима для настройки устройства"
+
+msgid "Listening to the computer output. No microphone or device connection."
+msgstr "Используется звук компьютера. Микрофон и ESP не подключаются."
+
+msgid "Live demo"
+msgstr "Демонстрация"
+
+msgid "Marker pixel"
+msgstr "Один светодиод"
+
+msgid "Music is enabled"
+msgstr "Музыкальная подсветка включена"
+
+msgid "Music level"
+msgstr "Музыкальная шкала"
+
+msgid "New strip"
+msgstr "Новая лента"
+
+msgid "No recent frame — start music lighting to see the preview."
+msgstr "Свежих кадров нет — включите музыкальную подсветку для предпросмотра."
+
+msgid "Notification signals"
+msgstr "Сигналы уведомлений"
+
+msgid "Overview"
+msgstr "Обзор"
+
+msgid "Palette"
+msgstr "Палитра"
+
+msgid "Prepare WESP firmware"
+msgstr "Подготовить прошивку WESP"
+
+msgid "Prepare WLED firmware"
+msgstr "Подготовить прошивку WLED"
+
+msgid "Preview signal"
+msgstr "Проверить сигнал"
+
+msgid "React to desktop music"
+msgstr "Реагировать на музыку компьютера"
+
+msgid "Remove"
+msgstr "Удалить"
+
+msgid "Retry"
+msgstr "Повторить"
+
+msgid "Silence — play audio on your computer"
+msgstr "Тишина — включите музыку на компьютере"
+
+msgid "The WESP window is starting. Try again shortly."
+msgstr "Окно WESP запускается. Повторите через несколько секунд."
+
+msgid "The command could not be completed"
+msgstr "Не удалось выполнить команду"
+
+msgid "Tint"
+msgstr "Цветовой оттенок"
+
+msgid "Try without an ESP"
+msgstr "Попробовать без ESP"
+
+msgid "Unsupported application command"
+msgstr "Неподдерживаемая команда приложения"
+
+msgid "Wait for the current operation to finish"
+msgstr "Дождитесь завершения текущего действия"
+
+msgid "Waiting for desktop audio"
+msgstr "Ожидание звука компьютера"
+
+msgid "Wi-Fi connected"
+msgstr "Wi-Fi подключён"
+
+msgid "Your desktop, in light"
+msgstr "Свет вашего рабочего места"
+
+msgid "Your lighting"
+msgstr "Ваша подсветка"
+
+msgid "Your strips will appear here. Open Connection to set up your ESP, or try without one."
+msgstr "Здесь появятся ваши ленты. Настройте ESP в разделе «Подключение» или попробуйте без неё."
+
+msgid "Open WESP"
+msgstr "Открыть WESP"
+
+msgid "Unknown music preset"
+msgstr "Неизвестная музыкальная настройка"
+
+msgid "Invalid saved music tuning"
+msgstr "Неверные сохранённые музыкальные параметры"
+
+msgid "Unknown lighting scene"
+msgstr "Неизвестная сцена подсветки"
+
+msgid "Unknown music style"
+msgstr "Неизвестный музыкальный рисунок"
+
+msgid "Choose a scene or music preset"
+msgstr "Выберите сцену или музыкальную настройку"
+
+msgid "Calm light"
+msgstr "Спокойный свет"
+
+msgid "Manual lighting"
+msgstr "Ручная подсветка"
+
+msgid "Paused for sleep"
+msgstr "Пауза на время сна"
+
+msgid "Volume · then %1"
+msgstr "Громкость · затем %1"
+
+msgid "Notification over %1"
+msgstr "Уведомление поверх: %1"
+
+msgid "Music style"
+msgstr "Музыкальный рисунок"
+
+msgid "Level meter"
+msgstr "Шкала"
+
+msgid "Pulse"
+msgstr "Пульс"
+
+msgid "Character"
+msgstr "Характер"
+
+msgid "My tuning"
+msgstr "Свой вариант"
+
+msgid "Soft"
+msgstr "Мягко"
+
+msgid "Vivid"
+msgstr "Выразительно"
+
+msgid "1. LED outputs"
+msgstr "1. Выходы лент"
+
+msgid "2. Check each strip"
+msgstr "2. Проверка каждой ленты"
+
+msgid "3. Wi-Fi and separate power"
+msgstr "3. Wi-Fi и отдельное питание"
+
+msgid "Add at least one LED output."
+msgstr "Добавьте хотя бы один выход ленты."
+
+msgid "Backup ready. Confirm firmware replacement."
+msgstr "Резервная копия готова. Подтвердите замену прошивки."
+
+msgid "Check RGB colors"
+msgstr "Проверить цвета RGB"
+
+msgid "Check Wi-Fi before switching the connection"
+msgstr "Проверьте Wi-Fi перед переключением подключения"
+
+msgid "Check direction"
+msgstr "Проверить направление"
+
+msgid "Checking strip: %1"
+msgstr "Проверка ленты: %1"
+
+msgid "Choose GPIO"
+msgstr "Выберите GPIO"
+
+msgid "Choose a GPIO for every output."
+msgstr "Выберите GPIO для каждого выхода."
+
+msgid "Choose a direction or RGB test"
+msgstr "Выберите проверку направления или RGB"
+
+msgid "Choose a saved strip to test"
+msgstr "Выберите сохранённую ленту для проверки"
+
+msgid "Connect USB to change the Wi-Fi network. LED outputs can be saved over Wi-Fi."
+msgstr "Для смены сети подключите USB. Выходы лент можно сохранять по Wi-Fi."
+
+msgid "Controller connected"
+msgstr "Контроллер подключён"
+
+msgid "Could not configure the receiver. Check the connection and output settings, then read the settings again."
+msgstr "Не удалось настроить контроллер. Проверьте подключение и параметры выходов, затем повторите чтение настроек."
+
+msgid "Downloading firmware"
+msgstr "Загрузка прошивки"
+
+msgid "Each check runs for up to 5 seconds at low brightness. Other sections stay dark."
+msgstr "Каждая проверка длится до 5 секунд на низкой яркости. Остальные секции не светятся."
+
+msgid "Each output needs a different GPIO."
+msgstr "Для каждого выхода нужен отдельный GPIO."
+
+msgid "Firmware installed"
+msgstr "Прошивка установлена"
+
+msgid "Firmware installed. Reading settings failed — retry the read."
+msgstr "Прошивка установлена. Не удалось прочитать настройки — повторите чтение."
+
+msgid "Firmware written. Finish setup."
+msgstr "Прошивка записана. Завершите настройку."
+
+msgid "Forward"
+msgstr "Прямое направление"
+
+msgid "I have WLED"
+msgstr "У меня уже есть WLED"
+
+msgid "I have a WESP receiver"
+msgstr "У меня уже есть контроллер WESP"
+
+msgid "Identifying the selected ESP"
+msgstr "Определение выбранной ESP"
+
+msgid "Installation cancelled"
+msgstr "Установка отменена"
+
+msgid "Installation failed; the backup is retained"
+msgstr "Установка не удалась; резервная копия сохранена"
+
+msgid "Invalid strip test request"
+msgstr "Некорректный запрос проверки ленты"
+
+msgid "Open strip checks"
+msgstr "Перейти к проверке лент"
+
+msgid "Outputs saved on the ESP. Test the strips, then verify Wi-Fi."
+msgstr "Выходы сохранены в ESP. Проверьте ленты, затем Wi-Fi."
+
+msgid "Preparing installation"
+msgstr "Подготовка установки"
+
+msgid "Preparing installation tools"
+msgstr "Подготовка средств установки"
+
+msgid "Read ESP settings"
+msgstr "Прочитать настройки ESP"
+
+msgid "Read the ESP settings first."
+msgstr "Сначала прочитайте настройки ESP."
+
+msgid "Receiver settings read. Configure its LED outputs."
+msgstr "Настройки ESP прочитаны. Задайте выходы лент."
+
+msgid "Retry reading settings"
+msgstr "Повторить чтение настроек"
+
+msgid "Save LED outputs over Wi-Fi"
+msgstr "Сохранить выходы лент по Wi-Fi"
+
+msgid "Save the layout before testing a section."
+msgstr "Сохраните расположение лент перед проверкой секции."
+
+msgid "Saving the original firmware"
+msgstr "Сохранение исходной прошивки"
+
+msgid "Select a USB port. Installation and first pairing require USB."
+msgstr "Выберите USB-порт. Установка и первая привязка выполняются по USB."
+
+msgid "Select the USB receiver before reading settings"
+msgstr "Выберите USB-контроллер перед чтением настроек"
+
+msgid "Set a length from 1 to 1024 LEDs."
+msgstr "Укажите длину от 1 до 1024 светодиодов."
+
+msgid "Set up a new ESP"
+msgstr "Настроить новую ESP"
+
+msgid "Stop strip test"
+msgstr "Остановить проверку ленты"
+
+msgid "Strip tests are paused during sleep"
+msgstr "Проверки лент приостановлены на время сна"
+
+msgid "The save could not be confirmed. Read the ESP settings again before retrying."
+msgstr "Не удалось подтвердить сохранение. Перед повторной попыткой прочитайте настройки ESP."
+
+msgid "The total length cannot exceed 1024 LEDs."
+msgstr "Общая длина не должна превышать 1024 светодиода."
+
+msgid "Turn on the lighting before testing a strip"
+msgstr "Включите подсветку перед проверкой ленты"
+
+msgid "Update the ESP firmware over USB once to enable configuration over Wi-Fi."
+msgstr "Для настройки по Wi-Fi один раз обновите прошивку ESP через USB."
+
+msgid "Using Wi-Fi. You can move the ESP to a separate power supply."
+msgstr "Работаем по Wi-Fi. Можно перевести ESP на отдельный блок питания."
+
+msgid "Wi-Fi verified for this receiver."
+msgstr "Связь по Wi-Fi с этой ESP подтверждена."
+
+msgid "Writing and verifying firmware"
+msgstr "Запись и проверка прошивки"
+
+msgid "Your paired ESP is available over Wi-Fi. USB is not needed to configure LED outputs."
+msgstr "Привязанная ESP доступна по Wi-Fi. Настраивать выходы лент можно без USB."
+
+msgid "Checking the updated ESP"
+msgstr "Проверка обновлённой ESP"
+
+msgid "Choose a preset action"
+msgstr "Выберите действие с пресетом"
+
+msgid "Choose a saved preset"
+msgstr "Выберите сохранённый пресет"
+
+msgid "Colors read from the ESP. Preview requests stop when this window closes."
+msgstr "Цвета прочитаны с ESP. При закрытии окна запросы предпросмотра прекращаются."
+
+msgid "Confirmation interval: %1 seconds"
+msgstr "Подтверждение каждые %1 с"
+
+msgid "ESP preview"
+msgstr "Предпросмотр с ESP"
+
+msgid "ESP update confirmed"
+msgstr "Обновление ESP подтверждено"
+
+msgid "ESP update could not be confirmed"
+msgstr "Не удалось подтвердить обновление ESP"
+
+msgid "Enter a preset name up to 32 characters"
+msgstr "Введите имя пресета длиной до 32 символов"
+
+msgid "Fade duration, seconds"
+msgstr "Длительность затухания, с"
+
+msgid "Five custom presets are already saved"
+msgstr "Уже сохранено пять пользовательских пресетов"
+
+msgid "Invalid saved presets"
+msgstr "Некорректные сохранённые пресеты"
+
+msgid "Load preset"
+msgstr "Применить пресет"
+
+msgid "Music and signals are rendered on the ESP."
+msgstr "Музыку и сигналы отрисовывает ESP."
+
+msgid "Music is rendered on this computer."
+msgstr "Музыку отрисовывает компьютер."
+
+msgid "Preparing Wi-Fi update"
+msgstr "Подготовка обновления по Wi-Fi"
+
+msgid "Preset name"
+msgstr "Имя пресета"
+
+msgid "Repeat on steady sound, ms (0 disables)"
+msgstr "Повтор на ровном звуке, мс (0 — выкл.)"
+
+msgid "Repeated pulses must be at least 180 ms apart"
+msgstr "Интервал повторных импульсов должен быть не меньше 180 мс"
+
+msgid "Save preset"
+msgstr "Сохранить пресет"
+
+msgid "Saved on this computer. ESP settings could not be confirmed; reconnect and save again."
+msgstr "Сохранено на компьютере. Не удалось подтвердить настройки ESP; восстановите связь и сохраните ещё раз."
+
+msgid "Saved presets"
+msgstr "Сохранённые пресеты"
+
+msgid "The update keeps your settings and leaves lighting off. First OTA setup requires one USB update."
+msgstr "Обновление сохраняет настройки и оставляет подсветку выключенной. Для первого запуска OTA нужно одно обновление по USB."
+
+msgid "Unknown preset action"
+msgstr "Неизвестное действие с пресетом"
+
+msgid "Update firmware over Wi-Fi"
+msgstr "Обновить прошивку по Wi-Fi"
+
+msgid "Uploading firmware over Wi-Fi"
+msgstr "Загрузка прошивки по Wi-Fi"
+
+msgid "Wait for connection, seconds"
+msgstr "Ожидание подтверждения, с"
+
+msgid "Wallpaper connection timeout"
+msgstr "Отключение подсветки обоев при потере связи"
+
+msgid "Receiver unavailable — audio capture remains active"
+msgstr "Контроллер недоступен — захват звука продолжает работать"

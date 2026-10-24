@@ -4,20 +4,98 @@
 [CI runs](https://github.com/shelomitsky/WESP/actions)
 
 Desktop ambient lighting for music, wallpapers and system events.
-The first alpha supports Linux/KDE Plasma 6 and WLED controllers.
+The first alpha supports Linux/KDE Plasma 6, existing WLED controllers and an experimental WESP USB/Wi-Fi receiver.
 Support for other desktop environments is planned after the KDE alpha.
 
 Author: **Chapman**. Licensed under MIT. Please credit Chapman when sharing
 screenshots, builds or articles about this project; retain the copyright and
 license notices when distributing its code.
 
-**0.2.0-alpha.5: local release candidate.** Generalized device/layout support and
-the new installer have automated checks. A fresh KDE session and physical LEDs
-still need acceptance before a public release. This candidate does not replace
-an existing installation automatically and has not been published.
+**0.2.0-alpha.15 — first alpha candidate.** Try the music demo without hardware,
+then connect one ESP for desktop music, accent lighting and temporary signals.
+Native WESP0.2.1 runs the effects locally over USB or Wi-Fi, supports paired
+configuration/presets and OTA, and rejects stale music instead of replaying it.
+The standalone window renders a smooth calculated music preview locally;
+opening it does not add audio capture or ESP frame requests for that preview.
+
+The tested desktop is Ubuntu26.04.1/KDE Plasma6.6 with a classic ESP32 and two
+RGB strips. This is an experimental alpha with a narrow support matrix, not a
+claim of compatibility with every board or desktop. See [first-alpha notes](FIRST_ALPHA.md)
+for verified paths and known limitations. Install and firmware replacement are
+explicit user actions; an existing controller is never flashed automatically.
 
 [Русский быстрый старт](QUICKSTART.ru.md) · [Changes](CHANGELOG.md) ·
 [Verification and remaining acceptance](RELEASE_CHECKLIST.md)
+
+Experimental native0.2.1 adds a separate fast music data path: fixed40-byte
+HMAC-authenticated UDP messages with fixed-point RMS/bass and sample time. Changes
+are sent up to100Hz; identical levels/silence refresh every400ms. Old/reordered
+samples are discarded instead of replayed. The desktop capture continuously drains
+into one2048-sample window; short-window RMS observes the latest10ms. Paired TCP
+still handles settings, events, power and OTA. Old native firmware and USB keep
+the existing feature/frame fallback. Physical latency results belong in the
+release checklist; software timer values alone are not an acoustic measurement.
+
+## Standalone application
+
+Open **WESP** from the application menu, or run `wesp` after installation.
+The window contains the live strip preview, music tuning, signals, section
+editor and the existing firmware/receiver setup. The Plasma widget remains an
+optional quick remote; **Open WESP** activates the same single application window.
+Closing the window leaves the desktop services running.
+
+**Try without an ESP** listens to the computer's audio output and uses the same
+desktop music analysis and section renderer. Native ESP rendering is checked
+with the C++ software bench; the device window uses a calculated local music
+preview, with actual ESP frames as a slower fallback outside that path.
+Its power, brightness and tuning are
+temporary and isolated from a real controller, including one already running.
+It never opens a device or changes the saved controller, network or pairing.
+The demo ends when the window closes. There is no microphone or screen capture.
+
+During native Wi-Fi music, device preview reuses the demo renderer with the
+same RMS/bass already captured for the ESP. Only the open window renders it;
+there is no second capture, FFT or extra ESP traffic. Other modes use the latest
+host frame or an on-demand ESP frame, separately from connection state. It is not an optical/current measurement. Initial standalone
+support is still Linux/KDE Plasma 6; moving the UI out of Plasma does not make
+the KDE integrations available on other desktops automatically.
+
+The GUI requires PySide6/Qt Quick in addition to the service dependencies below.
+Use your distribution's PySide6 QtCore/QtGui/QtQml/QtQuick/QtQuickControls2/QtNetwork
+packages, or a private user environment:
+
+```sh
+python3 -m venv --system-site-packages "${XDG_DATA_HOME:-$HOME/.local/share}/wled-control-tools/desktop-qt6"
+"${XDG_DATA_HOME:-$HOME/.local/share}/wled-control-tools/desktop-qt6/bin/python" -m pip install -r requirements-gui.txt
+python3 manage.py doctor
+python3 manage.py install
+```
+
+The launcher automatically uses that private GUI interpreter when system Python
+does not provide PySide6. The service interpreter remains `/usr/bin/python3`.
+PySide6 is a separate upstream dependency; WESP's MIT license covers its own code.
+No package manager or elevated privileges are invoked by the application itself.
+The Strips page offers bounded direction and RGB checks.
+
+### Music scenes
+
+Choose **Music** or **Calm light** as the base scene; choosing a scene never
+turns on an off device. Music offers the original **Level meter** and **Pulse**:
+a shorter steady bar with a shared smooth accent on low-frequency attacks.
+It does not estimate BPM, strobe or scatter random pixels. Both demo and device
+use the same analyzer/renderer, including section direction and unassigned gaps.
+
+**Soft** and **Vivid** tune sensitivity/gate/attack/decay together. **My tuning**
+restores the manual set saved before a preset; editing a tuning slider creates
+a new manual set. Palette, master brightness, hardware and networking are not
+part of these presets. The original meter remains the default.
+
+The overview names the active base or temporary signal. Selecting Calm light
+during the volume indicator returns to the current desktop accent after the
+indicator expires, without replaying an old pre-music snapshot. Calm currently
+uses the KDE accent; spatial wallpapers and automatic idle scenes are separate work.
+Pulse and meter remain experimental. The owner accepted beat alignment on
+Another One Bites the Dust; this is not an instrumented latency measurement.
 
 ## Features
 
@@ -41,9 +119,79 @@ setups, not a guarantee for arbitrary lengths. The existing local installation
 was physically checked on WLED 0.15.3; the generalized candidate needs its own
 hardware acceptance. Positions are saved for future wallpaper mapping.
 
-**Not implemented here:** spatial wallpaper-to-section mapping, Wi-Fi pixel transport,
-custom receiver firmware and integrated flashing. KDE accent color is a
+**Not implemented here:** spatial wallpaper-to-section mapping and WLED DDP transport.
+The experimental WESP receiver already supports its own USB/Wi-Fi transport.
+KDE accent color is a
 separate existing mode. No screen recording or microphone capture is used.
+
+## WESP receiver: USB setup, separate power and Wi-Fi
+
+The experimental receiver firmware is separate from WLED. Keep an accepted WLED
+board unchanged; select a separate classic 4 MB ESP32 for receiver testing.
+Build it with `python3 build_native_receiver.py --output-dir /path/outside/source`.
+The pinned PlatformIO build never opens a serial port. A desktop bundle can be
+built by `build_release.build(output, receiver=assets_directory)`; compiled images
+are checksum-verified optional release assets, never committed source binaries.
+
+In the standalone application's **Connection** page choose **Set up a new ESP**,
+then **Prepare WESP firmware**. Wait for a complete backup and confirm replacement
+on the identified test board. **Finish installation** reads settings from that
+exact board; a failed read has a separate retry. Choose GPIO, LED count, RGB order
+and current budget, enter the network/password, then save. GPIOs are never guessed.
+Network credentials travel over the private local bridge and USB, never shell
+arguments or logs. Save turns the outputs off; it does not start a light test.
+
+On **Strips**, turn lighting on when ready and check each saved section's direction
+or RGB colors. Checks are dim and finite (at most five seconds); other sections
+are black. Stop and Off cancel the test, and Off never gets undone by restoration.
+The same controls work virtually in demo mode without contacting any board.
+
+**Check Wi-Fi**, then **Use Wi-Fi** verify the same MAC and pairing key over TCP.
+After verification, move the ESP to a suitable separate supply and check connection
+again. Pairing credentials stay in a separate private desktop file. Stable
+`wesp-<MAC suffix>.local` discovery has the paired IP as fallback.
+
+For a paired native receiver with firmware **0.1.2**, **Read ESP settings** works
+over Wi-Fi without a selected USB port. Change GPIOs, counts, color order or current
+budget, then **Save LED outputs over Wi-Fi**. A separate read confirms exactly
+what the ESP saved before the desktop commits its state. Changing the Wi-Fi network
+and first pairing still require USB. Existing 0.1.1 boards need a one-time firmware
+update over USB; the app explains this instead of enabling an unsupported save.
+
+The receiver has one firmware for USB and Wi-Fi: RGB frames and static colors are
+computed on the PC. Firmware 0.1.1 adds one dim amber runner on configured outputs
+at startup and a green runner when a new WESP session is accepted. Each pass is
+700 ms; status polling does not repeat it. After these bounded signals, outputs
+stay black without valid PC frames. Off immediately cancels both the current
+signal and any queued signal.
+The internal 1.2-second watchdog reserves time for physical output within the
+1.5-second acceptance target. Physical timing still needs measurement. WLED
+effects/segments are not implemented by this receiver; the desktop adapter
+provides a single static RGB segment for its own compositor.
+
+This candidate requires real board, Wi-Fi and separate-power acceptance before
+public release. Passing compilation or protocol tests is not that acceptance.
+
+## First installation of WLED on a new ESP
+
+In **Device and strips**, select the USB port and choose **Install WLED on a new ESP**.
+The wizard creates a private esptool 4.11.0 environment, downloads checksum-pinned
+official WLED 0.15.3 images, identifies the board and saves its complete flash.
+Review the MAC and backup path, then confirm replacement of the firmware and all
+settings on that ESP. Keep USB connected until writing and verification finish.
+The widget then connects the flashed controller through normal enrollment.
+
+Supported here: unencrypted classic ESP32 with exactly 4 MB flash. Other chips,
+protected boards, incomplete backups, changed identities and a busy serial port
+are rejected before writing. Existing GPIO/count settings are erased; configure
+real LED outputs in WLED before connecting a strip. A board with no strip can
+verify firmware/USB setup, but cannot verify physical lighting.
+
+Internet access, Python venv/ensurepip and the `fuser` utility (psmisc) are needed
+for this optional workflow. Tools and private firmware/backups are kept under
+XDG_DATA_HOME and XDG_STATE_HOME; they are excluded from source archives.
+Errors retain the backup and do not trigger automatic erase/retry. Interrupted
+jobs are recovered when the widget next polls their state.
 
 ## Dependencies
 
@@ -60,7 +208,9 @@ system GI/DBus libraries. No distribution package command is claimed tested yet.
 
 The installer checks dependencies before changing files. `--no-start` stages
 files without starting services, dependency preflight or hardware access.
-It is intended for packaging/tests, not desktop acceptance.
+A subsequent normal install activates a staged installation. Upgrades of an
+already activated installation preserve intentionally inactive/disabled services.
+Staging is intended for packaging/tests, not desktop acceptance.
 Use the system interpreter above: installed launchers use `/usr/bin/python3`.
 A virtual environment with the Python packages alone is not a desktop install.
 
@@ -93,6 +243,11 @@ no personal device profile is shipped in this repository.
 directions; it contains no controller identity. Adjust directions and placement
 for the actual wiring, then use the widget or `layout` command after enrollment.
 
+Enrollment is committed by the USB owner under the shared command lock.
+An unavailable previous board does not by itself block an explicit selection;
+the equalizer/volume restoration guards above still apply. If saving the new
+selection fails, the previous selection and its saved documents are restored.
+
 ## Uninstall and rollback
 
 Run from the retained source checkout:
@@ -102,6 +257,9 @@ python3 manage.py uninstall
 python3 manage.py rollback /path/printed/by/installer
 ```
 
+Caught file failures during removal or explicit rollback restore the previous
+files, ownership manifest and service state from a transaction backup. Failed
+service shutdown aborts before modifying application files.
 Settings are retained. Owned files edited after installation block automatic
 replacement/removal. Unrelated files are not removed. Keep this source checkout
 until testing/rollback is finished. Service shutdown exits realtime; the
@@ -141,6 +299,13 @@ Qt6 check: `qmllint plasma/org.wledcontrol.desktop/contents/ui/main.qml`
 (your distribution may install qmllint outside PATH). Tests use isolated
 HOME/XDG dirs and fake UART; the IPC service/client boundary is real. Hardware latency and Plasma
 behavior are separate acceptance checks; see RELEASE_CHECKLIST.md.
+
+The separate Qt CI job runs `python3 check_qml_setup.py -v` with PyQt6 6.10.2
+and Qt 6.10.2. It exercises the shipped setup handler, input controls and Save
+button in a headless Qt component against the real private HTTP bridge. It
+checks form scope, deferred endpoint discovery, password clearing after success,
+retry after failure and saving outputs without replacing saved Wi-Fi credentials.
+These Python Qt bindings are development dependencies only.
 
 ## WLED
 
@@ -195,3 +360,50 @@ the persistent styles run while an active notification remains.
 After upgrading an existing installation, reload the Plasma widget (for example
 `systemctl --user restart plasma-plasmashell.service`). Desktop services are
 managed by the installer; keep its printed backup path for rollback.
+
+## Native music, presets and OTA (receiver0.2.0)
+
+On a native receiver0.2.0, WESP transmits unsmoothed RMS/bass instead of computing
+individual music pixels. The ESP handles adaptive gain, gate, attack/decay,
+meter/Pulse, repeated impulses on steady sound, and finite signal animations.
+Audio continues during notification/volume overlays; completion reveals current
+music. Off cancels all animation. A music/frame lease still expires at1200ms.
+
+Music controls and named presets are transferred over the selected paired USB or
+Wi-Fi route and confirmed by a separate read-back. There are three built-in
+configuration slots and five custom presets in this candidate. Presets contain
+tuning, palette and effect parameters; no controller identity or network secrets.
+The independent NVS effect key does not change the hardware/network config blob.
+
+For static desktop/wallpaper lighting, a changed color is sent once. Confirmations
+use7/8 of the configured connection timeout, measured from send time:8s means7s.
+The separate fade duration begins after expiry. Status and preview reads, effect
+configuration and event animation do not renew the base lease. Closing WESP's
+window stops preview requests while desktop services continue.
+
+In Connection, switch the paired receiver to Wi-Fi and use **Update firmware over
+Wi-Fi**. The update stops strip calibration, leaves output off, verifies the image
+and writes the inactive app slot. After reboot, WESP requires the exact build,
+preserved output/effect configuration and a trial boot before confirming it.
+An unconfirmed candidate rolls back after60s. Transfer interruption does not select
+an incomplete image. Physical rollover/recovery acceptance is recorded separately
+in RELEASE_CHECKLIST.md; builds and tests alone do not establish that acceptance.
+The native local-network transport uses the existing pairing token and is not
+encrypted; no OTA endpoint is exposed to the internet by WESP.
+
+### Software bench (development)
+
+The bench needs g++ with C++11 and Python. It compiles the same receiver_core.h
+and effects_engine.h used on the board into a private temporary library; it never
+opens USB, Wi-Fi or audio. Production WESP does not require a C++ compiler.
+
+```
+python3 -m unittest discover -s tests -p test_native_bench.py -v
+python3 native_sim.py --count 20 < timeline.jsonl
+```
+
+JSON-line operations are configure(effects), power(on), audio(rms,bass),
+event(kind,ref,value), solid(color), heartbeat and frame. at is a monotonic uint32
+millisecond timestamp supplied by the timeline. Replies contain the result or a
+fixed input error. This makes deterministic sound/event/timeout tests possible
+before hardware testing.

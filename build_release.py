@@ -9,22 +9,32 @@ import tarfile
 import verify_release
 
 
-def build(directory=None):
+def build(directory=None,receiver=None):
     root=Path(__file__).resolve().parent
     if verify_release.main():
         raise ValueError('Source checks failed')
     files=list(root.glob('*.py'))+list(root.glob('*.md'))
-    files += [root/'LICENSE',root/'requirements.txt',root/'.gitignore']
+    files += [root/'LICENSE',root/'requirements.txt',root/'requirements-gui.txt',root/'.gitignore']
+    files += list((root/'app').glob('*.qml'))
     files += list((root/'tests').glob('*.py'))+list((root/'tests').glob('*.js'))
     files += [p for p in (root/'plasma').rglob('*') if p.is_file()]
     files += list((root/'.github/workflows').glob('*.yml'))
     files += list((root/'examples').glob('*.json'))
     files += [p for p in (root/'locale').rglob('*') if p.is_file()]
+    files += [p for p in (root/'receiver').rglob('*') if p.is_file()]
     entries={}
     for file in sorted(set(files)):
         if file.is_symlink():
             raise ValueError('Symlink in source package: '+str(file.relative_to(root)))
         entries[str(file.relative_to(root))]=file.read_bytes()
+    if receiver is not None:
+        import receiver_assets
+        receiver=Path(receiver)
+        receiver_assets.validated(receiver)
+        import receiver_sources
+        materials=receiver_sources.release_files(receiver)
+        for name in ['manifest.json',*receiver_assets.OFFSETS,*materials]:
+            entries['receiver-firmware/'+name]=(receiver/name).read_bytes()
     hashes={name:hashlib.sha256(data).hexdigest() for name,data in entries.items()}
     entries['SOURCE_SHA256.json']=json.dumps(hashes,sort_keys=True,indent=2).encode()+b'\n'
     directory=Path(directory) if directory is not None else root.parent/'artifacts'

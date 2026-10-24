@@ -12,9 +12,7 @@ LOG=logging.getLogger('wled-control')
 
 
 def command(*args):
-    with control.locked():
-        result=control.execute(list(args))
-    return result
+    return control.dispatch(list(args))
 
 
 def monitor(kind):

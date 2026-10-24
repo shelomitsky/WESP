@@ -70,6 +70,16 @@ class ConfigurationTest(unittest.TestCase):
         self.assertFalse(result['configured'])
         self.assertIsNone(result['settings']['controller'])
 
+    def test_same_board_keeps_valid_sections_when_transport_or_count_changes(self):
+        sections=[dict(id='left',name='Left',start=0,count=10,reverse=True,placement='left'),
+                  dict(id='right',name='Right',start=10,count=10,reverse=False,placement='right')]
+        for old_count in (20,30):
+            old=dict(port='/dev/ttyUSB0',mac='021122334455',count=old_count,backend='wesp',connection='usb')
+            control.write_json(self.config/'settings.json',dict(controller=old,sections=sections))
+            selected=dict(old,count=20,connection='wifi',host='wesp-334455.local')
+            control.persist_enrollment(selected)
+            self.assertEqual(control.settings()['sections'],sections)
+
     def test_identity_and_count_are_enrolled_not_embedded(self):
         info=dict(info=dict(mac='021122334455',leds=dict(count=37)),state=dict(on=True,bri=128))
         device=usb_transport.Device('/dev/ttyUSB8',expected_mac='021122334455',led_count=37)
@@ -113,7 +123,10 @@ class ConfigurationTest(unittest.TestCase):
 
     def test_enrollment_persists_new_identity_and_disables_music(self):
         selected=dict(port='/dev/ttyUSB8',mac='021122334455',count=37)
-        with patch.object(usb_transport,'client',return_value=selected):
+        def enroll(**kwargs):
+            control.persist_enrollment(selected)
+            return selected
+        with patch.object(usb_transport,'client',side_effect=enroll):
             result=control.execute(['enroll','/dev/ttyUSB8'])
         self.assertEqual(result['settings']['controller'],selected)
         self.assertFalse(result['settings']['equalizer'])
@@ -124,7 +137,9 @@ class ConfigurationTest(unittest.TestCase):
         expected=dict(mac='021122334455',count=20)
         def enroll(**kwargs):
             self.assertEqual(kwargs['expected'],expected)
-            return dict(port='/dev/ttyUSB8',**expected)
+            selected=dict(port='/dev/ttyUSB8',**expected)
+            control.persist_enrollment(selected)
+            return selected
         with patch.object(usb_transport,'client',side_effect=enroll):
             control.execute(['enroll','/dev/ttyUSB8',json.dumps(expected)])
 
@@ -137,3 +152,33 @@ class ConfigurationTest(unittest.TestCase):
         with patch.object(control,'device_state',return_value=dict(on=False,bri=128)), \
              patch.object(usb_transport,'client',side_effect=AssertionError('unexpected pixels')):
             self.assertFalse(control.equalizer_frame(prefs,mem,[0,0,0],pixels=[[1,2,3]]))
+
+    def test_enrollment_partial_commit_failure_restores_both_documents_and_allows_retry(self):
+        selected=dict(port='/dev/ttyUSB9',mac='021122334466',count=2)
+        paths=(self.config/'settings.json', self.runtime/'state.json')
+        for existing in (False, True):
+            with self.subTest(existing=existing):
+                for path in paths:
+                    path.unlink(missing_ok=True)
+                if existing:
+                    control.write_json(paths[0],dict(controller=dict(port='/dev/ttyUSB8',mac='021122334455',count=2)))
+                    control.write_json(paths[1],dict(controller_mac='021122334455',base={'4':dict(fx=9)}))
+                before={path:path.read_bytes() if path.exists() else None for path in paths}
+                original_replace=Path.replace
+                failed=[]
+                def replace(source,target):
+                    if Path(target)==paths[0] and not failed:
+                        failed.append(True)
+                        raise OSError('injected settings commit failure')
+                    return original_replace(source,target)
+                with patch.object(Path,'replace',replace):
+                    with self.assertRaises(OSError):
+                        control.persist_enrollment(selected)
+                self.assertEqual(failed,[True])
+                for path,data in before.items():
+                    self.assertEqual(path.read_bytes() if path.exists() else None,data)
+                self.assertEqual(list(self.root.rglob('.wesp-enroll-*')),[])
+                control.persist_enrollment(selected)
+                self.assertEqual(control.settings()['controller'],selected)
+                self.assertEqual(control.runtime()['controller_mac'],selected['mac'])
+                self.assertEqual(control.runtime()['base'],{})

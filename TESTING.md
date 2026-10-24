@@ -1,4 +1,49 @@
-# Candidate verification — 2026-10-22
+# Verification record
+
+## Standalone application
+
+Music scenes add deterministic onset/continuous-bass/silence checks and shared
+layout routing, saved-custom/preset validation, configuration-write failure and
+volume→new-scene restoration. The Qt suite selects real style/preset controls
+and checks Calm after Off without any physical device calls.
+
+`python3 check_qml_desktop.py -v` uses PySide6 6.10.2 with the real ApplicationWindow,
+temporary config/runtime and a device-command rejection boundary. Install
+`requirements-gui.txt` in the test environment. The normal release gate stays
+Qt-independent; `.github/workflows/checks.yml` has a separate Qt desktop job.
+`tests/test_preview.py`, `test_desktop_bridge.py` and the real IPC export scenario
+check isolation, private/stale previews, shell-free commands and actual owner frames.
+The standalone Qt suite also moves brightness in demo and immediately leaves it;
+target/session-scoped commands prevent the delayed gesture reaching a real device.
+
+## Independent review fixes — 2026-10-23
+
+Two independent AI review contexts reviewed installer and controller handoff
+against baseline `5b5110ce89107422b9c4a93fea3523055dd2b095`, then independently
+re-reviewed the fixes. Both approved their scoped changes with no remaining
+reproduced P1/P2 findings. This is code review, not desktop/hardware acceptance.
+
+The local complete release gate passed **112 tests** and **166 translated
+messages**, real shell quoting, reproducible archives and cold installation
+lifecycle. Targeted verification includes:
+
+- 11 installer tests: failed stops (including activating services), staged
+  activation, preserving intentional disabled states, partial uninstall,
+  partial explicit rollback with changed v1/v2 payloads and successful retry.
+- 13 configuration tests: persistence failure restores both documents or their
+  prior absence, cleans temporary files and allows retry.
+- 19 transport tests and 7 actual multi-process IPC tests: disconnected/different
+  prior boards, changed counts, real read-only config failure, old snapshot vs
+  direct enrollment serialization, identity rejection and graceful shutdown.
+- The controller reviewer separately exercised owner-side EQ restoration and
+  dispatch enrollment; ordinary RPC completed without deadlock.
+
+All tests used temporary HOME/XDG/runtime and fake UART. No real systemd, user
+session, physical controller or installed application was changed by this work.
+External CI status for each source revision is available in the repository's
+[Actions](https://github.com/shelomitsky/WESP/actions).
+
+## Baseline verification — 2026-10-22
 
 Executed locally, before publication:
 
@@ -112,3 +157,24 @@ Live managed updates were separately applied with backups on the owner's setup;
 after the light/dark icon update, all 34 installed hashes matched and Plasma,
 USB and equalizer services were active. This does not accept fresh-user login
 or real installer rollback scenarios.
+
+## First-run wizard candidate (2026-10-24)
+
+`tests/test_firmware.py` covers unsupported/protected/swapped boards, exact backup
+size/digest, pinned downloads, one ROM connection for identity and write, foreign
+port owners, failed service recovery and automatic connection with a pinned MAC
+while excluding a concurrent preparation job. Source/backend checks do not accept
+physical lighting or the visible wizard. Real board/UI acceptance is pending.
+
+## USB/Wi-Fi receiver candidate (2026-10-24)
+
+Receiver safety core is compiled and run with address/undefined-behavior
+sanitizers. Tests cover complete RGB validation, watchdog/off, ownership,
+inactivity framing and current limits. Native host tests use actual loopback
+TCP for sessions, credentials, identity, count and reply guards, reconnection,
+static colors and explicit frame maintenance. The local setup bridge is tested
+for authentication and credential redaction. ESP32 compilation is an independent
+CI job without device access. Firmware assets are built outside the worktree.
+
+Physical LEDs, actual USB/Wi-Fi handoff, standalone supply and measured PC-off
+dark behavior remain separate acceptance and must be recorded explicitly.

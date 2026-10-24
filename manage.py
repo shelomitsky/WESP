@@ -49,7 +49,14 @@ def systemctl(*args,check=True):
 
 def doctor():
     missing=[name for name in ('numpy','serial','dbus','gi','PIL') if importlib.util.find_spec(name) is None]
-    missing += [name for name in ('parec','wpctl','systemctl','plasmashell') if not shutil.which(name)]
+    if importlib.util.find_spec('PySide6') is None:
+        runtime=paths()['data']/'wled-control-tools/desktop-qt6/bin/python'
+        try:
+            subprocess.run([str(runtime),'-c','from PySide6.QtQuick import QQuickWindow'],
+                           check=True,capture_output=True,timeout=8)
+        except (OSError,subprocess.SubprocessError):
+            missing.append('PySide6 (standalone GUI)')
+    missing += [name for name in ('parec','pactl','wpctl','systemctl','plasmashell') if not shutil.which(name)]
     if not missing:
         try:
             from gi.repository import GLib
@@ -63,8 +70,19 @@ def payloads():
     app=p['data']/'wled-control'
     result={}
     for name in ('control.py','equalizer.py','usb_transport.py','usb_probe.py','events.py',
-                 'layout.py','notification_fx.py','wallpaper.py','i18n.py','services.py','manage.py','LICENSE','README.md'):
+                 'layout.py','notification_fx.py','wallpaper.py','i18n.py','services.py','firmware.py',
+                 'wesp_transport.py','receiver_setup.py','receiver_assets.py','manage.py','LICENSE','NOTICE.md','README.md',
+                 'desktop.py','desktop_bridge.py','preview.py','music.py','scenes.py','first_light.py','effects_config.py','ota_update.py','preset_store.py','audio_source.py','realtime_protocol.py','realtime_owner.py','feature_preview.py','realtime_capture.py','realtime_producer.py'):
         result[app/name]=((SOURCE/name).read_bytes(),0o644)
+    for file in (SOURCE/'receiver/licenses').glob('*.txt'):
+        result[app/'licenses'/file.name]=(file.read_bytes(),0o644)
+    for file in (SOURCE/'app').glob('*.qml'):
+        result[app/'app'/file.name]=(file.read_bytes(),0o644)
+    if (SOURCE/'receiver-firmware/manifest.json').exists():
+        import receiver_assets
+        receiver_assets.validated(SOURCE/'receiver-firmware')
+        for name in ['manifest.json',*receiver_assets.OFFSETS]:
+            result[app/'receiver-firmware'/name]=((SOURCE/'receiver-firmware'/name).read_bytes(),0o600)
     for catalog in (SOURCE/'locale').glob('*/LC_MESSAGES/plasma_applet_org.wledcontrol.desktop.mo'):
         relative=catalog.relative_to(SOURCE/'locale')
         data=catalog.read_bytes()
@@ -78,9 +96,14 @@ def payloads():
             relative=file.relative_to(SOURCE/'plasma'/widget)
             result[p['data']/'plasma/plasmoids'/widget/relative]=(file.read_bytes(),0o644)
             result[app/'plasma'/widget/relative]=(file.read_bytes(),0o644)
-    for launcher,module in (('wled-control','control.py'),('wled-control-service','services.py')):
+    for launcher,module in (('wled-control','control.py'),('wled-control-service','services.py'),('wesp','desktop.py')):
         text='#!/usr/bin/python3\nimport os,sys\nos.execv(sys.executable,[sys.executable,'+repr(str(app/module))+',*sys.argv[1:]])\n'
         result[p['home']/'.local/bin'/launcher]=(text.encode(),0o755)
+    executable=str(app/'desktop.py').replace('%','%%')
+    executable=executable.replace('\\','\\\\').replace('"','\\"').replace('`','\\`').replace('$','\\$')
+    executable=executable.replace('\\','\\\\')
+    entry='[Desktop Entry]\nType=Application\nName=WESP\nComment=Desktop ambient lighting\nExec=/usr/bin/python3 "'+executable+'"\nIcon=wled-control\nTerminal=false\nCategories=Utility;Settings;\n'
+    result[p['data']/'applications/wesp.desktop']=(entry.encode(),0o644)
     for name,mode in MODES.items():
         text='[Unit]\nDescription=WESP '+name+'\nAfter=graphical-session.target\nPartOf=graphical-session.target\n'
         if name != 'usb':
@@ -118,20 +141,53 @@ def save_backup(targets,previous,start):
     directory.mkdir(parents=True,mode=0o700)
     files={str(p):dict(data=base64.b64encode(p.read_bytes()).decode(),mode=p.stat().st_mode & 0o777)
            if p.exists() else None for p in targets}
-    states={u:dict(active=systemctl('is-active',u,check=False).returncode==0,
-                   enabled=systemctl('is-enabled',u,check=False).returncode==0)
-            for u in UNITS} if start else {}
-    record=dict(files=files,previous=previous,services=states)
+    states=service_states() if start else {}
+    activation=paths()['state']/'activation.json'
+    record=dict(files=files,previous=previous,services=states,
+                activation=activation.read_text() if activation.exists() else None)
     atomic_write(directory/'transaction.json',json.dumps(record).encode(),0o600)
     return directory,record
 
 
+def service_running(unit):
+    result=systemctl('is-active',unit,check=False)
+    return result.returncode==0 or getattr(result,'stdout','').strip() in (
+        'activating','reloading','deactivating','refreshing')
+
+
+def service_states():
+    return {unit:dict(active=service_running(unit),
+                      enabled=systemctl('is-enabled',unit,check=False).returncode==0)
+            for unit in UNITS}
+
+
 def stop_services():
-    systemctl('stop',*UNITS,check=False)
+    # Existing units may be activating or waiting for an automatic restart;
+    # a binary is-active check is insufficient to cancel those jobs.
+    directory=paths()['config']/'systemd/user'
+    units=[unit for unit in UNITS if (directory/unit).exists() or service_running(unit)]
+    if units:
+        systemctl('stop',*units)
 
 
-def prepare_service_restore(record):
-    stop_services()
+def stop_for_transaction(record):
+    try:
+        stop_services()
+    except Exception:
+        # A failed multi-unit stop can already have stopped some units.
+        failed=[]
+        for unit,old in record['services'].items():
+            if old['active']:
+                if systemctl('start',unit,check=False).returncode:
+                    failed.append(unit)
+        if failed:
+            raise RuntimeError('Service stop failed; could not restart: '+', '.join(failed))
+        raise
+
+
+def prepare_service_restore(record,stop=True):
+    if stop:
+        stop_services()
     # Remove new enablement links while their unit files still exist.
     for unit,old in record['services'].items():
         if not old['enabled']:
@@ -153,6 +209,11 @@ def restore(record,start):
         atomic_write(state,json.dumps(record['previous']).encode(),0o600)
     else:
         state.unlink(missing_ok=True)
+    activation=paths()['state']/'activation.json'
+    if record.get('activation') is None:
+        activation.unlink(missing_ok=True)
+    else:
+        atomic_write(activation,record['activation'].encode(),0o600)
     if start:
         systemctl('daemon-reload')
         for unit,old in record['services'].items():
@@ -175,9 +236,13 @@ def install(start=True):
             if file.is_symlink() or (file.exists() and str(file) not in previous):
                 raise ValueError('Refusing to replace an unmanaged file: '+str(file))
         backup,record=save_backup(targets,previous,start)
+        activation=paths()['state']/'activation.json'
+        # Missing metadata belongs to a legacy managed installation: preserve
+        # its intentional inactive/disabled states on upgrade.
+        activated=json.loads(activation.read_text())['activated'] if activation.exists() else bool(previous)
+        if start:
+            stop_for_transaction(record)
         try:
-            if start:
-                stop_services()
             installed={}
             for file,(data,mode) in targets.items():
                 atomic_write(file,data,mode)
@@ -185,12 +250,13 @@ def install(start=True):
             atomic_write(paths()['state']/'install.json',json.dumps(installed).encode(),0o600)
             if start:
                 systemctl('daemon-reload')
-                if not previous:
+                if not activated:
                     systemctl('enable','--now',*UNITS)
                 else:
                     for unit,old in record['services'].items():
                         if old['active']:
                             systemctl('start',unit)
+            atomic_write(activation,json.dumps(dict(activated=activated or start)).encode(),0o600)
         except Exception:
             if start:
                 prepare_service_restore(record)
@@ -213,9 +279,21 @@ def rollback(directory,start=True):
         for name in record['files']:
             if Path(name).exists() and name not in current:
                 raise ValueError('Refusing to replace an unmanaged file')
+        recovery_backup,recovery=save_backup([Path(name) for name in record['files']],current,start)
         if start:
-            prepare_service_restore(record)
-        restore(record,start)
+            stop_for_transaction(recovery)
+        try:
+            if start:
+                prepare_service_restore(record,stop=False)
+            restore(record,start)
+        except Exception:
+            try:
+                if start:
+                    prepare_service_restore(recovery)
+                restore(recovery,start)
+            except Exception as error:
+                raise RuntimeError('Rollback recovery failed; backup: '+str(recovery_backup)) from error
+            raise
 
 
 def remove(start=True):
@@ -224,14 +302,25 @@ def remove(start=True):
     with transaction_lock():
         manifest=read_manifest()
         check_owned(manifest,payloads())
-        if start and manifest:
-            stop_services()
-            systemctl('disable',*UNITS,check=False)
-        for file in manifest:
-            Path(file).unlink()
-        (paths()['state']/'install.json').unlink(missing_ok=True)
+        if not manifest:
+            return
+        backup,record=save_backup([Path(name) for name in manifest],manifest,start)
         if start:
-            systemctl('daemon-reload')
+            stop_for_transaction(record)
+        try:
+            if start:
+                systemctl('disable',*UNITS)
+            for file in manifest:
+                Path(file).unlink()
+            (paths()['state']/'install.json').unlink(missing_ok=True)
+            (paths()['state']/'activation.json').unlink(missing_ok=True)
+            if start:
+                systemctl('daemon-reload')
+        except Exception:
+            if start:
+                prepare_service_restore(record)
+            restore(record,start)
+            raise
 
 
 def main():
