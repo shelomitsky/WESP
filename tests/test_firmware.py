@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import patch
 from unittest.mock import Mock
 import sys
-import threading
 
 import firmware
 
@@ -18,8 +17,9 @@ class FirmwareTest(unittest.TestCase):
             with patch.object(firmware,'state_root',return_value=root), \
                  patch.object(firmware,'validate_port',return_value=dict(port='/dev/ttyUSB0')), \
                  patch.object(firmware.subprocess,'Popen',return_value=Mock(pid=123)), \
-                 patch.object(firmware,'process_stamp',return_value='test'):
-                result=firmware.start('prepare','/dev/ttyUSB0')
+                 patch.object(firmware,'process_stamp',return_value='test'), \
+                 patch('receiver_assets.stage',return_value={'version':'0.2.1'}):
+                result=firmware.start('prepare-native','/dev/ttyUSB0')
             self.assertEqual(result['backup_start_baud'],115200)
 
     def test_backup_read_error_restarts_once_at_base_speed_and_checks_chip_digest(self):
@@ -68,15 +68,6 @@ class FirmwareTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     firmware.check_file(p, bad_hash, size=size)
 
-    def test_image_hash_mismatch_never_builds_flash_payload(self):
-        with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
-            for name in firmware.IMAGES:
-                (root/name).write_bytes(b'wrong download')
-            with self.assertRaises(ValueError):
-                firmware.merged_image(root)
-            self.assertFalse((root/'combined.bin').exists())
-
     def test_restore_restarts_only_previously_active_services(self):
         with patch.object(firmware, 'systemctl') as run:
             firmware.restore_services(['wled-control-usb.service'])
@@ -106,7 +97,7 @@ class FirmwareTest(unittest.TestCase):
         board=dict(chip='ESP32', mac='680947485628', size=4194304, secure=False)
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)
-            data=dict(stage='starting', port='/dev/ttyUSB0', identity={'serial':'A'},
+            data=dict(stage='starting', flavor='wesp', port='/dev/ttyUSB0', identity={'serial':'A'},
                       board=board, backup=str(root/'original.bin'), backup_sha256='a'*64, folder=folder)
             esp=Mock()
             tool=Mock()
@@ -116,7 +107,7 @@ class FirmwareTest(unittest.TestCase):
                  patch.object(firmware, 'pause_services'), patch.object(firmware, 'require_free_port'), \
                  patch.object(firmware, 'board_info', return_value=board), \
                  patch.object(firmware, 'check_file') as verified, \
-                 patch.object(firmware, 'merged_image', return_value=root/'combined.bin'):
+                 patch('receiver_assets.merged', return_value=root/'combined.bin'):
                 firmware.operate(root, data, 'install')
             tool.detect_chip.assert_called_once_with('/dev/ttyUSB0', baud=115200)
             self.assertIs(tool.main.call_args.kwargs['esp'], esp)
@@ -129,7 +120,7 @@ class FirmwareTest(unittest.TestCase):
     def test_swapped_board_closes_port_without_write(self):
         board=dict(chip='ESP32', mac='680947485628', size=4194304, secure=False)
         with tempfile.TemporaryDirectory() as folder:
-            data=dict(port='/dev/ttyUSB0', identity={}, board=dict(board,mac='a0b7652d2050'))
+            data=dict(flavor='wesp',port='/dev/ttyUSB0', identity={}, board=dict(board,mac='a0b7652d2050'))
             tool=Mock()
             esp=tool.detect_chip.return_value
             with patch.dict(sys.modules, esptool=tool), \
@@ -181,31 +172,6 @@ class FirmwareTest(unittest.TestCase):
         device.verify_identity(dict(info=dict(mac='680947485628',leds=dict(count=30))))
         self.assertEqual(device.led_count,30)
 
-    def test_automatic_connect_pins_mac_and_blocks_concurrent_prepare(self):
-        import control
-        with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder)
-            data=dict(stage='flashed',port='/dev/ttyUSB0',token='test',board=dict(mac='680947485628'))
-            firmware.save_job(root,data)
-            entered=threading.Event()
-            release=threading.Event()
-            observed=[]
-            def enroll(args):
-                observed.append(args)
-                entered.set()
-                if not release.wait(5): raise RuntimeError('test timed out')
-                return dict(ok=True)
-            with patch.object(firmware,'state_root',return_value=root), patch.object(control,'execute',side_effect=enroll):
-                thread=threading.Thread(target=control.dispatch,args=(['firmware-connect','test'],))
-                thread.start()
-                try:
-                    self.assertTrue(entered.wait(5))
-                    with self.assertRaises(ValueError): firmware.start('prepare','/dev/ttyUSB9')
-                finally:
-                    release.set()
-                    thread.join(5)
-            self.assertEqual(__import__('json').loads(observed[0][2]),dict(mac='680947485628'))
-            self.assertEqual(firmware.read_job(root)['stage'],'connected')
 
 
 if __name__ == '__main__':

@@ -45,7 +45,8 @@ class PCMWindow:
 
 
 class LatestCapture:
-    def __init__(self):
+    def __init__(self,client='WESP Audio'):
+        self.client=client
         self.window=PCMWindow()
         self.stop=threading.Event()
         self.monitor=OutputMonitor()
@@ -57,7 +58,7 @@ class LatestCapture:
             process=None
             try:
                 source=self.monitor.source
-                process=subprocess.Popen(capture_command(source,10,'WESP Audio'),
+                process=subprocess.Popen(capture_command(source,10,self.client),
                     stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,bufsize=0)
                 os.set_blocking(process.stdout.fileno(),False)
                 self.window.reset();pending=bytearray()

@@ -1,4 +1,4 @@
-"""Explicit, backed-up first installation of WLED on a classic 4MB ESP32.
+"""Explicit, backed-up first installation of WESP on a classic 4MB ESP32.
 
 The background worker runs in its own managed esptool environment. No UART is
 opened by status polling, and identity checks and writes share one connection.
@@ -14,17 +14,12 @@ import signal
 import subprocess
 import sys
 import time
-import urllib.request
 import uuid
 
 from i18n import tr
 
-VERSION = '0.15.3'
 FLASH_SIZE = 4 * 1024 * 1024
-IMAGES = {
-    'esp32_bootloader_v4.bin': ('v0.13.1', '694d36d82db55b39060f2e0a2ab348d665d8a0d15659b2f5864f315b8d33eeb6', 0),
-    'WLED_0.15.3_ESP32.bin': ('v0.15.3', '76cdbfb8b13a818b266df937d346b7f5534b0d115be3c537ec1fb12ab0515468', 0x10000),
-}
+# Legacy download/connecting stages remain recoverable after an interrupted upgrade.
 BUSY = {'starting', 'tools', 'download', 'detecting', 'backup', 'writing', 'connecting'}
 
 
@@ -100,36 +95,6 @@ def check_file(path, digest, size=None):
         raise ValueError(tr('File verification failed. Nothing has been written'))
 
 
-def merged_image(folder):
-    combined = bytearray(b'\xff' * FLASH_SIZE)
-    end = 0
-    for name, (_, digest, offset) in IMAGES.items():
-        path = folder/name
-        check_file(path, digest)
-        payload = path.read_bytes()
-        if offset < end or offset + len(payload) > FLASH_SIZE:
-            raise ValueError(tr('The firmware image does not fit this board'))
-        combined[offset:offset+len(payload)] = payload
-        end = offset + len(payload)
-    target = folder/'combined.bin'
-    target.write_bytes(combined)
-    return target
-
-
-def download_images(folder):
-    for name, (tag, digest, _) in IMAGES.items():
-        target = folder/name
-        if not target.exists():
-            url = 'https://github.com/wled/WLED/releases/download/'+tag+'/'+name
-            with urllib.request.urlopen(url, timeout=60) as response:
-                content = response.read(FLASH_SIZE + 1)
-            if len(content) > FLASH_SIZE:
-                raise ValueError(tr('The firmware image does not fit this board'))
-            import manage
-            manage.atomic_write(target, content, 0o600)
-        check_file(target, digest)
-
-
 def tool_python():
     base = Path(os.environ.get('XDG_DATA_HOME', Path.home()/'.local/share'))/'wled-control-tools/esptool-4.11.0'
     python = base/'bin/python'
@@ -174,7 +139,12 @@ def status():
 
 
 def start(action, value):
+    if action not in ('prepare-native','install','cancel'):
+        raise ValueError(tr('Unknown command'))
     root=state_root()
+    if action=='install':
+        with job_lock(root):
+            require_native_job(read_job(root),'install')
     status()
     with job_lock(root):
         data=read_job(root)
@@ -182,22 +152,21 @@ def start(action, value):
             raise ValueError(tr('Could not restart WESP services'))
         if data['stage'] in BUSY:
             raise ValueError(tr('A controller installation is already running'))
-        if action in ('prepare','prepare-native'):
+        if action == 'prepare-native':
             slow_backup=(data.get('backup_baud')==115200 or
                          (data['stage']=='failed' and bool(data.get('error'))))
-            native=action=='prepare-native'
             action='prepare'
             identity=validate_port(value)
             folder=root/uuid.uuid4().hex
             folder.mkdir(mode=0o700)
             data=dict(stage='starting', port=value, identity=identity, folder=str(folder),
-                      version=VERSION, percent=0, active=[], error='',
+                      percent=0, active=[], error='',
                       backup_start_baud=115200 if slow_backup else 460800)
-            if native:
-                import receiver_assets
-                manifest=receiver_assets.stage(Path(__file__).resolve().parent/'receiver-firmware',folder)
-                data.update(flavor='wesp',version=manifest['version'])
+            import receiver_assets
+            manifest=receiver_assets.stage(Path(__file__).resolve().parent/'receiver-firmware',folder)
+            data.update(flavor='wesp',version=manifest['version'])
         elif action == 'install':
+            require_native_job(data,'install')
             if data['stage'] != 'prepared' or value != data.get('token'):
                 raise ValueError(tr('Prepare the board before confirming installation'))
             data.update(stage='starting', error='', percent=0)
@@ -298,7 +267,13 @@ def read_verified_backup(esp, progress, retry_errors):
             progress(0,FLASH_SIZE)
 
 
+def require_native_job(data,action):
+    if action not in ('prepare','install') or data.get('flavor')!='wesp':
+        raise ValueError(tr('Prepare the board before confirming installation'))
+
+
 def operate(root, data, action):
+    require_native_job(data,action)
     import esptool
     if validate_port(data['port']) != data['identity']:
         raise ValueError(tr('The USB controller changed. Prepare the selected board again'))
@@ -334,11 +309,8 @@ def operate(root, data, action):
         else:
             validate_board(board, expected=data['board'])
             check_file(Path(data['backup']), data['backup_sha256'], size=FLASH_SIZE)
-            if data.get('flavor')=='wesp':
-                import receiver_assets
-                combined=receiver_assets.merged(Path(data['folder']))
-            else:
-                combined=merged_image(Path(data['folder']))
+            import receiver_assets
+            combined=receiver_assets.merged(Path(data['folder']))
             stage(root, data, 'writing', percent=0)
             # The 4 MB merged image resets stale configuration too. esptool's
             # normal MD5 verification covers the complete image before success.
@@ -375,12 +347,10 @@ def launch(action):
     root=state_root()
     with job_lock(root):
         data=read_job(root)
+    require_native_job(data,action)
     try:
         stage(root, data, 'tools')
         python=tool_python()
-        if action == 'prepare' and data.get('flavor')!='wesp':
-            stage(root, data, 'download')
-            download_images(Path(data['folder']))
         # exec keeps PID/starttime stable for crash recovery polling.
         os.execv(str(python), [str(python), str(Path(__file__).resolve()), 'worker', action])
     except Exception as error:

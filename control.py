@@ -767,33 +767,12 @@ def dispatch(args):
     if args[:1]==['receiver-setup-link']:
         import receiver_setup
         return dict(ok=True,setup=read_json(RUNTIME/'receiver-setup.json',{}))
-    if args[:1] == ['firmware-connect']:
-        import firmware
-        root=firmware.state_root()
-        with firmware.job_lock(root):
-            data=firmware.read_job(root)
-            if len(args) != 2 or data['stage'] != 'flashed' or args[1] != data.get('token'):
-                raise ValueError(tr("Prepare the board before confirming installation"))
-            firmware.stage(root, data, 'connecting', pid=os.getpid(), stamp=firmware.process_stamp(os.getpid()))
-        try:
-            # Discover LED count only after the firmware's exact MAC matches.
-            result=execute(['enroll', data['port'], json.dumps(dict(mac=data['board']['mac']))])
-        except Exception:
-            with firmware.job_lock(root):
-                if firmware.read_job(root).get('token') == data['token']:
-                    firmware.stage(root, data, 'installed')
-            raise
-        with firmware.job_lock(root):
-            current=firmware.read_job(root)
-            if current.get('token') != data['token'] or current['stage'] != 'connecting':
-                raise ValueError(tr("The USB controller changed. Prepare the selected board again"))
-            firmware.stage(root, data, 'connected')
-        result['firmware']=data
-        return result
+    if args[:1] in (['firmware-prepare'],['firmware-connect']):
+        raise ValueError(tr('Unknown command'))
     if args[:1] == ['firmware-status']:
         import firmware
         return dict(ok=True, firmware=firmware.status())
-    if args[:1] in (['firmware-prepare'], ['firmware-prepare-native'], ['firmware-install'], ['firmware-cancel']):
+    if args[:1] in (['firmware-prepare-native'], ['firmware-install'], ['firmware-cancel']):
         import firmware
         if len(args) != 2:
             raise ValueError(tr("Prepare the board before confirming installation"))
