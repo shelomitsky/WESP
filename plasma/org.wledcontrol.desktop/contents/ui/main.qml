@@ -156,7 +156,7 @@ PlasmoidItem {
         runner.connectSource(source);
     }
     function acceptResult(data) {
-        if (data.ok === true && (activeCommand[0] === "enroll" || activeCommand[0] === "firmware-connect")) {
+        if (data.ok === true && activeCommand[0] === "enroll") {
             receiverInfo=({}); receiverOutputs=[];
             receiverSsid=""; receiverPassword=""; receiverNetworkDirty=false;
             receiverCurrentBudget=500; selectedReceiverConnection="usb";
@@ -174,7 +174,7 @@ PlasmoidItem {
                 if (firmwareJob.flavor === "wesp") {
                     root.settingsExpanded=true; root.settingsPage=2;
                     root.request(["firmware-native-ready",firmwareJob.token]);
-                } else root.request(["firmware-connect", firmwareJob.token]);
+                }
             }
         }
         if (data.wallpaper) {
@@ -225,7 +225,7 @@ PlasmoidItem {
                 var result = JSON.parse(data["stdout"]);
                 root.acceptResult(result);
                 if (result.ok && data["exit code"] === 0) {
-                    if (root.activeCommand[0] === "layout" || root.activeCommand[0] === "enroll" || root.activeCommand[0] === "firmware-connect") {
+                    if (root.activeCommand[0] === "layout" || root.activeCommand[0] === "enroll") {
                         root.layoutDirty = false;
                         root.draftSections = JSON.parse(JSON.stringify(root.sections));
                     }
@@ -770,26 +770,17 @@ PlasmoidItem {
                         }
                     }
                 }
-                QQC2.Button {
-                    text: i18nd("plasma_applet_org.wledcontrol.desktop", "Install WLED on a new ESP")
-                    Layout.fillWidth: true
-                    enabled: root.selectedPort.length > 0 && !root.busy && !root.firmwareBusy && root.firmwareJob.stage !== "prepared"
-                    onClicked: root.request(["firmware-prepare", root.selectedPort])
-                }
                 QQC2.Label {
                     Layout.fillWidth: true; wrapMode: Text.WordWrap
                     visible: root.firmwareBusy
                     text: {
                         switch(root.firmwareJob.stage) {
                         case "tools": return i18nd("plasma_applet_org.wledcontrol.desktop", "Preparing the installer…");
-                        case "download": return i18nd("plasma_applet_org.wledcontrol.desktop", "Downloading verified WLED firmware…");
                         case "detecting": return i18nd("plasma_applet_org.wledcontrol.desktop", "Checking the selected ESP…");
                         case "backup": return root.firmwareJob.backup_baud === 115200
                             ? i18nd("plasma_applet_org.wledcontrol.desktop", "Saving at a compatible USB speed: %1%. This may take about ten minutes.",root.firmwareJob.percent || 0)
                             : i18nd("plasma_applet_org.wledcontrol.desktop", "Saving the original firmware: %1%. This may take several minutes.", root.firmwareJob.percent || 0);
-                        case "writing": return root.firmwareJob.flavor === "wesp"
-                            ? i18nd("plasma_applet_org.wledcontrol.desktop", "Installing WESP. Keep the USB cable connected…")
-                            : i18nd("plasma_applet_org.wledcontrol.desktop", "Installing WLED. Keep the USB cable connected…");
+                        case "writing": return i18nd("plasma_applet_org.wledcontrol.desktop", "Installing WESP. Keep the USB cable connected…");
                         default: return i18nd("plasma_applet_org.wledcontrol.desktop", "Starting the installer…");
                         }
                     }
@@ -801,21 +792,21 @@ PlasmoidItem {
                     from: 0; to: 100; value: root.firmwareJob.percent || 0
                 }
                 QQC2.Label {
-                    visible: root.firmwareJob.stage === "prepared"
+                    visible: root.firmwareJob.stage === "prepared" && root.firmwareJob.flavor === "wesp"
                     Layout.fillWidth: true; wrapMode: Text.WordWrap
-                    text: i18nd("plasma_applet_org.wledcontrol.desktop", "ESP32 · %1 · %2\nFirmware %3\nOriginal firmware saved to: %4", root.firmwareJob.port || "", root.firmwareJob.board ? root.firmwareJob.board.mac : "", (root.firmwareJob.flavor === "wesp" ? "WESP " : "WLED ")+(root.firmwareJob.version || ""), root.firmwareJob.backup || "")
+                    text: i18nd("plasma_applet_org.wledcontrol.desktop", "ESP32 · %1 · %2\nFirmware %3\nOriginal firmware saved to: %4", root.firmwareJob.port || "", root.firmwareJob.board ? root.firmwareJob.board.mac : "", "WESP "+(root.firmwareJob.version || ""), root.firmwareJob.backup || "")
                 }
                 QQC2.CheckBox {
-                    visible: root.firmwareJob.stage === "prepared"
+                    visible: root.firmwareJob.stage === "prepared" && root.firmwareJob.flavor === "wesp"
                     Layout.fillWidth: true
                     text: i18nd("plasma_applet_org.wledcontrol.desktop", "Replace the firmware and erase all settings on this ESP")
                     checked: root.firmwareConfirmed
                     onClicked: root.firmwareConfirmed = checked
                 }
                 RowLayout {
-                    visible: root.firmwareJob.stage === "prepared"
+                    visible: root.firmwareJob.stage === "prepared" && root.firmwareJob.flavor === "wesp"
                     QQC2.Button {
-                        text: root.firmwareJob.flavor === "wesp" ? i18nd("plasma_applet_org.wledcontrol.desktop", "Install WESP") : i18nd("plasma_applet_org.wledcontrol.desktop", "Install WLED")
+                        text: i18nd("plasma_applet_org.wledcontrol.desktop", "Install WESP")
                         enabled: root.firmwareConfirmed && !root.busy
                         onClicked: root.request(["firmware-install", root.firmwareJob.token])
                     }
@@ -826,13 +817,11 @@ PlasmoidItem {
                     }
                 }
                 QQC2.Label {
-                    visible: root.firmwareJob.stage === "failed" || ["flashed", "installed", "connected"].indexOf(root.firmwareJob.stage) >= 0
+                    visible: root.firmwareJob.stage === "failed" || (root.firmwareJob.flavor === "wesp" && ["flashed", "installed", "connected"].indexOf(root.firmwareJob.stage) >= 0)
                     Layout.fillWidth: true; wrapMode: Text.WordWrap
                     text: root.firmwareJob.stage === "failed"
                         ? i18nd("plasma_applet_org.wledcontrol.desktop", "Installation failed: %1\nBackup: %2", root.firmwareJob.error || "", root.firmwareJob.backup || "—")
-                        : root.firmwareJob.flavor === "wesp"
-                            ? i18nd("plasma_applet_org.wledcontrol.desktop", "WESP installed. Read the receiver above, then save its outputs and network.")
-                            : i18nd("plasma_applet_org.wledcontrol.desktop", "WLED installed. Connect the controller, then set up the LED outputs in WLED before attaching a strip.")
+                        : i18nd("plasma_applet_org.wledcontrol.desktop", "WESP installed. Read the receiver above, then save its outputs and network.")
                 }
                 QQC2.Label { text: i18nd("plasma_applet_org.wledcontrol.desktop", "LEDs: %1", root.ledCount) }
                 QQC2.Label {

@@ -516,20 +516,11 @@ msgstr "Не удалось проверить, кто использует USB-
 msgid "Could not restart WESP services"
 msgstr "Не удалось запустить службы WESP"
 
-msgid "Downloading verified WLED firmware…"
-msgstr "Загрузка проверенной прошивки WLED…"
-
 msgid "ESP32 · %1 · %2\nWLED %3\nOriginal firmware saved to: %4"
 msgstr "ESP32 · %1 · %2\nWLED %3\nИсходная прошивка сохранена: %4"
 
 msgid "File verification failed. Nothing has been written"
 msgstr "Проверка файла не пройдена. Запись не выполнялась"
-
-msgid "Install WLED"
-msgstr "Установить WLED"
-
-msgid "Install WLED on a new ESP"
-msgstr "Установить WLED на новую ESP"
 
 msgid "Installation can only be cancelled before writing starts"
 msgstr "Установку можно отменить только до начала записи"
@@ -539,9 +530,6 @@ msgstr "Установка не завершена: %1\nРезервная ко�
 
 msgid "Installation was interrupted. The backup has been retained"
 msgstr "Установка прервана. Резервная копия сохранена"
-
-msgid "Installing WLED. Keep the USB cable connected…"
-msgstr "Установка WLED. Не отключайте USB-кабель…"
 
 msgid "Only an unencrypted classic ESP32 with 4 MB flash is supported"
 msgstr "Поддерживается только обычная ESP32 с 4 МБ памяти без шифрования"
@@ -575,9 +563,6 @@ msgstr "Образ прошивки не подходит по размеру д
 
 msgid "The selected USB device is no longer connected"
 msgstr "Выбранное USB-устройство отключено"
-
-msgid "WLED installed. Connect the controller, then set up the LED outputs in WLED before attaching a strip."
-msgstr "WLED установлен. Подключите контроллер и настройте выходы в WLED перед подключением ленты."
 
 msgid "Add LED output"
 msgstr "Добавить выход ленты"
@@ -749,9 +734,6 @@ msgstr "Палитра"
 
 msgid "Prepare WESP firmware"
 msgstr "Подготовить прошивку WESP"
-
-msgid "Prepare WLED firmware"
-msgstr "Подготовить прошивку WLED"
 
 msgid "Preview signal"
 msgstr "Проверить сигнал"

@@ -20,8 +20,8 @@ class DeviceBackend:
                 'enroll', 'clear', 'notify-preview', 'firmware-status','scene','music-preset',
                 'first-light','first-light-stop',
                 'preset-save','preset-load','preset-delete','ota-start','ota-status',
-                'firmware-prepare', 'firmware-prepare-native', 'firmware-install',
-                'firmware-cancel', 'firmware-connect', 'firmware-native-ready'}
+                'firmware-prepare-native', 'firmware-install',
+                'firmware-cancel', 'firmware-native-ready'}
 
     def command(self, args):
         if not args or args[0] not in self.COMMANDS:
@@ -263,10 +263,10 @@ class DesktopModel:
             self.action_warning=result.get('warning','')
             if action == 'ports':
                 self.ports = result['ports']
-            if action in ('enroll', 'firmware-connect'):
+            if action == 'enroll':
                 self.receiver = {}
                 self.setup_error='';self.setup_note='';self.wifi_verified=False
-            if action in ('firmware-prepare','firmware-prepare-native'):
+            if action == 'firmware-prepare-native':
                 self.pending_probe=None;self.setup_error='';self.setup_note=''
             if action=='firmware-native-ready':
                 job=result['firmware']

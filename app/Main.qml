@@ -128,7 +128,7 @@ ApplicationWindow {
                 }
                 Item { Layout.fillHeight:true }
                 Button { text:root.demo ? root.t("Back to my device") : root.t("Try without an ESP"); Layout.fillWidth:true; enabled:!bridge.busy; onClicked:bridge.setDemo(!root.demo) }
-                Label { text:root.demo ? root.t("Demo — your device is unchanged") : "0.2.0-alpha.15"; wrapMode:Text.WordWrap; Layout.fillWidth:true; opacity:.6 }
+                Label { text:root.demo ? root.t("Demo — your device is unchanged") : "0.2.0-alpha.16"; wrapMode:Text.WordWrap; Layout.fillWidth:true; opacity:.6 }
             }
         }
         ColumnLayout {
@@ -365,16 +365,15 @@ ApplicationWindow {
                         Label { text:root.t("Install on a new ESP");visible:root.setupPath===2; font.pixelSize:19; font.weight:Font.DemiBold; topPadding:20 }
                         RowLayout {
                             visible:root.setupPath===2
-                            Button { text:root.t("Prepare WESP firmware");enabled:!!root.selectedPort && !root.firmwareBusy && !bridge.busy;onClicked:{root.replaceConfirmed=false;bridge.action("firmware-prepare-native",[root.selectedPort]);} }
-                            Button { text:root.t("Prepare WLED firmware");enabled:!!root.selectedPort && !root.firmwareBusy && !bridge.busy;onClicked:{root.replaceConfirmed=false;bridge.action("firmware-prepare",[root.selectedPort]);} }
+                            Button { objectName:"prepareWespFirmwareButton";text:root.t("Prepare WESP firmware");enabled:!!root.selectedPort && !root.firmwareBusy && !bridge.busy;onClicked:{root.replaceConfirmed=false;bridge.action("firmware-prepare-native",[root.selectedPort]);} }
                         }
                         Label { text:(root.job.error || root.job.label || "")+" "+(root.job.percent === undefined ? "" : root.job.percent+"%")+"\n"+(root.job.board ? "ESP: "+root.job.board.mac+" · "+(root.job.port || "")+"\n" : "")+(root.job.backup || "");wrapMode:Text.WordWrap;Layout.fillWidth:true;visible:!!root.job.stage && root.job.stage!=="idle" }
-                        CheckBox { text:root.t("Replace the firmware and erase all settings on this ESP"); visible:root.job.stage==="prepared";checked:root.replaceConfirmed;onClicked:root.replaceConfirmed=checked }
+                        CheckBox { text:root.t("Replace the firmware and erase all settings on this ESP"); visible:root.job.stage==="prepared" && root.job.flavor==="wesp";checked:root.replaceConfirmed;onClicked:root.replaceConfirmed=checked }
                         RowLayout {
-                            Button { text:root.t("Install firmware");visible:root.job.stage==="prepared";enabled:root.replaceConfirmed && !bridge.busy;onClicked:bridge.action("firmware-install",[root.job.token]) }
+                            Button { text:root.t("Install firmware");visible:root.job.stage==="prepared" && root.job.flavor==="wesp";enabled:root.replaceConfirmed && !bridge.busy;onClicked:bridge.action("firmware-install",[root.job.token]) }
                             Button { text:root.t("Cancel");visible:root.job.stage==="prepared";onClicked:bridge.action("firmware-cancel",[root.job.token]) }
                         }
-                        Button { text:root.t("Finish installation");visible:root.job.stage==="flashed";onClicked:bridge.action(root.job.flavor==="wesp" ? "firmware-native-ready" : "firmware-connect",[root.job.token]) }
+                        Button { text:root.t("Finish installation");visible:root.job.stage==="flashed" && root.job.flavor==="wesp";onClicked:bridge.action("firmware-native-ready",[root.job.token]) }
                     }
                 }
             }

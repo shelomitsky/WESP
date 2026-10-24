@@ -11,7 +11,7 @@ Author: **Chapman**. Licensed under MIT. Please credit Chapman when sharing
 screenshots, builds or articles about this project; retain the copyright and
 license notices when distributing its code.
 
-**0.2.0-alpha.15 — first alpha candidate.** Try the music demo without hardware,
+**0.2.0-alpha.16 — cleanup candidate.** Try the music demo without hardware,
 then connect one ESP for desktop music, accent lighting and temporary signals.
 Native WESP0.2.1 runs the effects locally over USB or Wi-Fi, supports paired
 configuration/presets and OTA, and rejects stale music instead of replaying it.
@@ -172,26 +172,12 @@ provides a single static RGB segment for its own compositor.
 This candidate requires real board, Wi-Fi and separate-power acceptance before
 public release. Passing compilation or protocol tests is not that acceptance.
 
-## First installation of WLED on a new ESP
+## Existing WLED controllers
 
-In **Device and strips**, select the USB port and choose **Install WLED on a new ESP**.
-The wizard creates a private esptool 4.11.0 environment, downloads checksum-pinned
-official WLED 0.15.3 images, identifies the board and saves its complete flash.
-Review the MAC and backup path, then confirm replacement of the firmware and all
-settings on that ESP. Keep USB connected until writing and verification finish.
-The widget then connects the flashed controller through normal enrollment.
-
-Supported here: unencrypted classic ESP32 with exactly 4 MB flash. Other chips,
-protected boards, incomplete backups, changed identities and a busy serial port
-are rejected before writing. Existing GPIO/count settings are erased; configure
-real LED outputs in WLED before connecting a strip. A board with no strip can
-verify firmware/USB setup, but cannot verify physical lighting.
-
-Internet access, Python venv/ensurepip and the `fuser` utility (psmisc) are needed
-for this optional workflow. Tools and private firmware/backups are kept under
-XDG_DATA_HOME and XDG_STATE_HOME; they are excluded from source archives.
-Errors retain the backup and do not trigger automatic erase/retry. Interrupted
-jobs are recovered when the widget next polls their state.
+WESP connects to already configured WLED controllers over USB. WLED firmware
+installation is not part of WESP; use the [official WLED installer](https://install.wled.me/)
+if a board needs WLED. The built-in backed-up installer is only for WESP firmware.
+Existing WLED identity/count checks, enrollment and USB frame transport are retained.
 
 ## Dependencies
 

@@ -196,7 +196,7 @@ class QmlSetupTest(unittest.TestCase):
         self.assertNotIn('Wi-Fi',text)
 
     def test_successful_enrollment_clears_previous_receiver_display_and_secret(self):
-        for action in ('enroll','firmware-connect'):
+        for action in ('enroll',):
             with self.subTest(action=action):
                 self.root.setProperty('receiverInfo',dict(mac='680947485628',connection='wifi'))
                 self.root.setProperty('selectedReceiverConnection','wifi')
