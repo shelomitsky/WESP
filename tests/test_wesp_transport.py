@@ -55,6 +55,26 @@ class Receiver:
 
 
 class TransportTests(unittest.TestCase):
+    def test_usb_reads_available_reply_without_waiting_for_full_buffer(self):
+        clock=[0.0]
+        class Serial:
+            data=b''
+            @property
+            def in_waiting(self):return len(self.data)
+            def write(self,packet):
+                request=json.loads(packet)
+                self.data=json.dumps(dict(ok=True,id=request['id'],mac=MAC,proto=1,count=2,on=False,bri=255)).encode()+b'\n'
+                return len(packet)
+            def read(self,size):
+                if size>len(self.data):clock[0]+=.05  # Real pyserial waits for its timeout.
+                result,self.data=self.data[:size],self.data[size:]
+                return result
+            def close(self):pass
+        device=wesp.Device(port='/dev/fake',expected_mac=MAC,led_count=2)
+        device.serial=Serial();device.session='a'*16
+        with patch.object(wesp.time,'monotonic',side_effect=lambda:clock[0]):device.query()
+        self.assertLess(device.last_exchange['elapsed_ms'],10)
+
     def test_usb_hello_waits_for_boot_and_discards_boot_bytes(self):
         events=[]
         stream=Mock()

@@ -265,7 +265,8 @@ class Device:
             if partial_since is not None and time.monotonic()-partial_since > PARTIAL_TIMEOUT:
                 raise TimeoutError('Incomplete WESP response timed out')
             try:
-                chunk = self.sock.recv(1024) if self.sock is not None else self.serial.read(1024)
+                chunk = (self.sock.recv(1024) if self.sock is not None else
+                         self.serial.read(min(1024,max(1,getattr(self.serial,'in_waiting',0)))))
             except socket.timeout:
                 continue
             if not chunk and self.sock is not None:
