@@ -203,6 +203,13 @@ Qt6 check: `qmllint plasma/org.wledcontrol.desktop/contents/ui/main.qml`
 HOME/XDG dirs and fake UART; the IPC service/client boundary is real. Hardware latency and Plasma
 behavior are separate acceptance checks; see RELEASE_CHECKLIST.md.
 
+The separate Qt CI job runs `python3 check_qml_setup.py -v` with PyQt6 6.10.2
+and Qt 6.10.2. It exercises the shipped setup handler, input controls and Save
+button in a headless Qt component against the real private HTTP bridge. It
+checks form scope, deferred endpoint discovery, password clearing after success,
+retry after failure and saving outputs without replacing saved Wi-Fi credentials.
+These Python Qt bindings are development dependencies only.
+
 ## WLED
 
 This is an independent desktop client. WLED firmware is not included or

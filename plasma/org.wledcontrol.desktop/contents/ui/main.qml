@@ -48,6 +48,10 @@ PlasmoidItem {
     property string pendingSetupAction: ""
     property var receiverInfo: ({})
     property var receiverOutputs: []
+    property int receiverCurrentBudget: 500
+    property string receiverSsid: ""
+    property string receiverPassword: ""
+    property bool receiverNetworkDirty: false
 
     function editOutput(index,key,value) {
         var copy=JSON.parse(JSON.stringify(receiverOutputs));
@@ -63,8 +67,10 @@ PlasmoidItem {
         var payload={action:action,port:selectedPort,mac:receiverInfo.mac || ""};
         if (action === "configure") {
             payload.outputs=receiverOutputs;
-            payload.max_milliamps=currentBudget.value;
-            if (wifiSsid.text.length) { payload.ssid=wifiSsid.text; payload.password=wifiPassword.text; }
+            payload.max_milliamps=root.receiverCurrentBudget;
+            if (root.receiverNetworkDirty && root.receiverSsid.length) {
+                payload.ssid=root.receiverSsid; payload.password=root.receiverPassword;
+            }
         }
         var xhr=new XMLHttpRequest();
         busy=true;
@@ -74,8 +80,14 @@ PlasmoidItem {
                 var reply=JSON.parse(xhr.responseText);
                 if (!reply.ok) throw new Error("setup failed");
                 receiverInfo=reply.receiver;
-                if (action !== "status" && action !== "wifi") receiverOutputs=JSON.parse(JSON.stringify(receiverInfo.outputs || []));
-                if (action === "configure") wifiPassword.text="";
+                if (action !== "status" && action !== "wifi") {
+                    receiverOutputs=JSON.parse(JSON.stringify(receiverInfo.outputs || []));
+                    receiverCurrentBudget=receiverInfo.max_milliamps || 500;
+                }
+                if (action === "configure") {
+                    root.receiverPassword="";
+                    root.receiverNetworkDirty=false;
+                }
                 errorText="";
             } catch(e) {
                 errorText=i18nd("plasma_applet_org.wledcontrol.desktop", "Could not configure the receiver. Check the USB connection, GPIOs and network settings.");
@@ -724,10 +736,10 @@ PlasmoidItem {
                         }
                         RowLayout {
                             QQC2.Label {text:i18nd("plasma_applet_org.wledcontrol.desktop", "LED current limit, mA")}
-                            QQC2.SpinBox { id:currentBudget; from:100; to:5000; stepSize:100; value:root.receiverInfo.max_milliamps || 500; editable:true; enabled:!root.busy }
+                            QQC2.SpinBox { id:currentBudget; from:100; to:5000; stepSize:100; value:root.receiverCurrentBudget; editable:true; enabled:!root.busy; onValueModified:root.receiverCurrentBudget=value }
                         }
-                        QQC2.TextField { id:wifiSsid; Layout.fillWidth:true; placeholderText:i18nd("plasma_applet_org.wledcontrol.desktop", "Wi-Fi network name (optional)"); enabled:!root.busy }
-                        QQC2.TextField { id:wifiPassword; Layout.fillWidth:true; placeholderText:i18nd("plasma_applet_org.wledcontrol.desktop", "Wi-Fi password"); echoMode:TextInput.Password; enabled:!root.busy }
+                        QQC2.TextField { id:wifiSsid; Layout.fillWidth:true; placeholderText:i18nd("plasma_applet_org.wledcontrol.desktop", "Wi-Fi network name (optional)"); text:root.receiverSsid; onTextEdited:{root.receiverSsid=text;root.receiverNetworkDirty=true;} enabled:!root.busy }
+                        QQC2.TextField { id:wifiPassword; Layout.fillWidth:true; placeholderText:i18nd("plasma_applet_org.wledcontrol.desktop", "Wi-Fi password"); text:root.receiverPassword; onTextEdited:{root.receiverPassword=text;root.receiverNetworkDirty=true;} echoMode:TextInput.Password; enabled:!root.busy }
                         QQC2.Button {
                             text:i18nd("plasma_applet_org.wledcontrol.desktop", "Save outputs and network to ESP")
                             enabled:!!root.receiverInfo.mac && root.receiverOutputs.length>0 && !root.busy && !root.firmwareBusy
