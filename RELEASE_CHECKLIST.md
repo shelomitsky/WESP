@@ -90,15 +90,16 @@ and standard slideshow following are already implemented.
 - [x] Move the receiver to a separate USB supply: the computer USB port disappears,
   the receiver rejoins Wi-Fi and the existing desktop owner receives repeated
   verified status replies. Settings survive the power cycle.
-- [ ] Verify real lighting from the separate suitable power supply.
+- [x] Verify real lighting from the separate USB supply: the owner confirmed
+  both strips fully illuminated during a 20-second dim blue test.
 - [ ] Exercise hostname/IP fallback recovery after DHCP or DNS changes.
 - [ ] Stop the PC sender and measure physical dark within the 1.5-second target.
 - [ ] Test reboot, USB/network interruptions, wrong identity and configuration recovery.
 
 The owner confirmed the widget installation/configuration and separate USB supply
 steps. Status checks verified identity and retained settings after that power
-cycle. The strips were disconnected; LED output and physical darkness are not
-accepted by these checks.
+cycle. The owner then connected the strips and accepted the dim blue output
+test. Physical darkness timing remains unmeasured.
 
 ESP32 compile and native host/safety tests do not close these physical gates.
 The previously accepted WLED board must remain unchanged.
