@@ -24,7 +24,7 @@ class Bridge:
                     return
                 try:
                     size=int(self.headers.get('Content-Length','0'))
-                    if not 0<size<=8192 or self.headers.get('Content-Type')!='application/json':
+                    if not 0<size<=8192 or self.headers.get_content_type()!='application/json':
                         raise ValueError('Invalid setup request')
                     data=json.loads(self.rfile.read(size))
                     if not isinstance(data,dict):

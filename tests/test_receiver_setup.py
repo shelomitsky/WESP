@@ -59,5 +59,39 @@ class SetupBridgeTest(unittest.TestCase):
             finally: bridge.close()
             self.assertFalse((Path(folder)/'receiver-setup.json').exists())
 
+    def test_qt_json_request_with_utf8_charset_reads_outputs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            outputs=[dict(gpio=2,count=10,order='GRB'),dict(gpio=4,count=10,order='GRB')]
+            bridge=receiver_setup.Bridge(folder,lambda data:dict(mac='680947485628',outputs=outputs))
+            try:
+                meta=json.loads(bridge.path.read_text())
+                opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                request=urllib.request.Request(meta['url'],
+                    data=b'{"action":"probe","port":"/dev/ttyUSB0","mac":""}',
+                    # QML XMLHttpRequest adds this charset to application/json.
+                    headers={'Content-Type':'application/json;charset=UTF-8',
+                             'Authorization':'Bearer '+meta['bearer']})
+                with opener.open(request,timeout=3) as response:
+                    result=json.load(response)
+                self.assertTrue(result['ok'])
+                self.assertEqual(result['receiver']['outputs'],outputs)
+            finally: bridge.close()
+
+    def test_bridge_rejects_non_json_media_type_before_callback(self):
+        with tempfile.TemporaryDirectory() as folder:
+            callback=Mock()
+            bridge=receiver_setup.Bridge(folder,callback)
+            try:
+                meta=json.loads(bridge.path.read_text())
+                opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                for content_type in ('text/plain;charset=UTF-8','application/jsonp',''):
+                    with self.subTest(content_type=content_type):
+                        request=urllib.request.Request(meta['url'],data=b'{"action":"probe"}',
+                            headers={'Content-Type':content_type,'Authorization':'Bearer '+meta['bearer']})
+                        with opener.open(request,timeout=3) as response:
+                            self.assertFalse(json.load(response)['ok'])
+                callback.assert_not_called()
+            finally: bridge.close()
+
 
 if __name__=='__main__': unittest.main()
