@@ -230,7 +230,7 @@ support for untested desktops, hardware or lifecycle combinations.
 - [x] Actual Qt: local frames continue while a control command is busy, full
   status does not blank them, and local preview suppresses extra ESP frame reads.
 - [x] Named-platform fresh-HOME installation/window smoke and source privacy scan.
-- [ ] Final CI, installed hash/settings checks and live preview traffic comparison.
+- [x] Final CI, installed hash/settings checks and live preview traffic comparison.
 
 Alpha15 candidate:249 tests/full release lifecycle PASS; actualQt desktop12
 and setup8 PASS. A staged install from the complete archive into a fresh HOME/XDG
@@ -244,3 +244,11 @@ Binary-bundle publication review: exact upstream license copies and pinned
 Arduino library sources/rebuild instructions are included and checksum-covered.
 The packaging gate rejects missing materials; a clean PlatformIO install path
 is tested. Final251 tests/full archive lifecycle and native builder PASS.
+
+Alpha15 live check: both6-job CI runs on ef75b64 passed. Installed65 managed
+files matched all hashes; settings and pairing stayed byte-identical. On the
+owner’s playing music the window rendered282 local frames (247 distinct) over
+10.542s with0 ESP preview requests,0 RGB frames and2 TCP replies;658 audio
+datagrams were sent with0 producer send failures and source age<=6.9ms. Exactly
+one WESP Audio capture was present. The previous On state was explicitly restored
+after the installer’s safe Off. Firmware remained0.2.1; no new OTA was needed.
