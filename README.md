@@ -41,8 +41,9 @@ setups, not a guarantee for arbitrary lengths. The existing local installation
 was physically checked on WLED 0.15.3; the generalized candidate needs its own
 hardware acceptance. Positions are saved for future wallpaper mapping.
 
-**Not implemented here:** spatial wallpaper-to-section mapping, Wi-Fi pixel transport,
-custom receiver firmware. KDE accent color is a
+**Not implemented here:** spatial wallpaper-to-section mapping and WLED DDP transport.
+The experimental WESP receiver already supports its own USB/Wi-Fi transport.
+KDE accent color is a
 separate existing mode. No screen recording or microphone capture is used.
 
 ## WESP receiver: USB setup, separate power and Wi-Fi
@@ -66,7 +67,11 @@ supply. Pairing credentials stay in a separate private desktop file. Stable
 `wesp-<MAC suffix>.local` discovery has the paired IP as fallback.
 
 The receiver has one firmware for USB and Wi-Fi: RGB frames and static colors are
-computed on the PC. On boot, Off or loss of valid PC frames, outputs are black.
+computed on the PC. Firmware 0.1.1 adds one dim amber runner on configured outputs
+at startup and a green runner when a new WESP session is accepted. Each pass is
+700 ms; status polling does not repeat it. After these bounded signals, outputs
+stay black without valid PC frames. Off immediately cancels both the current
+signal and any queued signal.
 The internal 1.2-second watchdog reserves time for physical output within the
 1.5-second acceptance target. Physical timing still needs measurement. WLED
 effects/segments are not implemented by this receiver; the desktop adapter

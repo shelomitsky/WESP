@@ -52,14 +52,18 @@ inline bool validSession(const char *s) {
 struct Session {
   Sequence sequence;
   char value[17]{};
-  bool accept(const char *s, int32_t id, bool hello, bool usb) {
+  bool accept(const char *s, int32_t id, bool hello, bool usb, bool *fresh=nullptr) {
+    if (fresh) *fresh=false;
     if (!validSession(s)) return false;
-    if (strcmp(value,s)) {
+    bool changed=strcmp(value,s)!=0;
+    if (changed) {
       if (!hello || (value[0] && !usb) || id<=0) return false;
       sequence=Sequence{};
       memcpy(value,s,17);
     }
-    return sequence.accept(id,hello);
+    if (!sequence.accept(id,hello)) return false;
+    if (fresh) *fresh=changed;
+    return true;
   }
 };
 enum class LineEvent { None, Ready, Discarded };
@@ -95,11 +99,24 @@ inline int b64(char c) {
   if (c=='/') return 63;
   return -1;
 }
+enum class StatusCue { None, Boot, Connected };
 class Core {
   uint8_t raw[MaxPixels*3]{};
   uint8_t rendered[MaxPixels*3]{};
   bool hasFrame=false;
   char ownerSession[17]{};
+  StatusCue statusCue=StatusCue::None;
+  bool queuedConnection=false;
+  uint32_t statusStarted=0,lastStatusPaint=0;
+  void clearStatus() { statusCue=StatusCue::None; queuedConnection=false; }
+  void advanceStatus(uint32_t now) {
+    if (statusCue==StatusCue::None || uint32_t(now-statusStarted)<700) return;
+    if (statusCue==StatusCue::Boot && queuedConnection) {
+      statusCue=StatusCue::Connected; queuedConnection=false; statusStarted+=700;
+      if (uint32_t(now-statusStarted)<700) return;
+    }
+    clearStatus();
+  }
 public:
   Output outputs[8]{};
   size_t outputCount=0, count=0;
@@ -107,13 +124,37 @@ public:
   Transport owner=Transport::None;
   bool on=false;
   uint8_t brightness=255;
-  void dark() { memset(raw,0,sizeof(raw)); hasFrame=false; owner=Transport::None; ownerSession[0]=0; }
+  void dark() { memset(raw,0,sizeof(raw)); hasFrame=false; owner=Transport::None; ownerSession[0]=0; clearStatus(); }
   void off() { on=false; dark(); }
   bool configure(const Output *out, size_t n, uint32_t ma) {
     if (!validOutputs(out,n,ma)) return false;
     off(); outputCount=n; count=0; maxMilliamps=ma;
     for (size_t i=0;i<n;++i) { outputs[i]=out[i]; count+=out[i].count; }
     return true;
+  }
+  bool announceBoot(uint32_t now,bool outputsReady) {
+    advanceStatus(now);
+    if (!outputsReady || !count || owner!=Transport::None || statusCue!=StatusCue::None) return false;
+    statusCue=StatusCue::Boot; statusStarted=now; lastStatusPaint=now-20;
+    return true;
+  }
+  bool announceConnected(uint32_t now,bool outputsReady) {
+    advanceStatus(now);
+    // A new handshake must not obscure an already active stream/owner.
+    if (!outputsReady || !count || owner!=Transport::None || statusCue==StatusCue::Connected) return false;
+    if (statusCue==StatusCue::Boot) {
+      if (queuedConnection) return false;
+      queuedConnection=true; return true;
+    }
+    statusCue=StatusCue::Connected; statusStarted=now; lastStatusPaint=now-20;
+    return true;
+  }
+  bool statusTick(uint32_t now) {
+    bool active=statusCue!=StatusCue::None;
+    advanceStatus(now);
+    if (statusCue==StatusCue::None) return active;
+    if (uint32_t(now-lastStatusPaint)<20) return false;
+    lastStatusPaint=now; return true;
   }
   bool tick(uint32_t now) {
     if (owner!=Transport::None && uint32_t(now-lastFrame)>=WatchdogMs) { dark(); return true; }
@@ -136,11 +177,26 @@ public:
     strncpy(ownerSession,session,16); ownerSession[16]=0;
     return true;
   }
-  const uint8_t *render() {
+  const uint8_t *render(uint32_t now=0) {
+    advanceStatus(now);
     memset(rendered,0,sizeof(rendered));
-    if (!on || !hasFrame) return rendered;
+    if (statusCue!=StatusCue::None) {
+      const uint8_t amber[3]={255,96,0},green[3]={0,255,48};
+      const uint8_t *color=statusCue==StatusCue::Boot?amber:green;
+      size_t start=0;
+      for (size_t i=0;i<outputCount;++i) {
+        size_t head=uint32_t(now-statusStarted)*outputs[i].count/700;
+        for (size_t tail=0;tail<3 && tail<=head;++tail) {
+          for (size_t channel=0;channel<3;++channel)
+            rendered[(start+head-tail)*3+channel]=uint16_t(color[channel])*(20>>tail)/255;
+        }
+        start+=outputs[i].count;
+      }
+    } else if (on && hasFrame) {
+      for (size_t i=0;i<count*3;++i) rendered[i]=(uint16_t(raw[i])*brightness)/255;
+    }
     uint64_t sum=0;
-    for (size_t i=0; i<count*3; ++i) { rendered[i]=(uint16_t(raw[i])*brightness)/255; sum+=rendered[i]; }
+    for (size_t i=0;i<count*3;++i) sum+=rendered[i];
     // 20mA per full channel. Integer floor never exceeds the configured budget.
     uint64_t budget=uint64_t(maxMilliamps)*255;
     if (sum*20 > budget) for (size_t i=0; i<count*3; ++i) rendered[i]=uint64_t(rendered[i])*budget/(sum*20);

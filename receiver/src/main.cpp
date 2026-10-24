@@ -22,6 +22,7 @@ char mac[13]{};
 char token[65]{};
 char hostname[12]{}, wifiHost[18]{};
 bool nvsReady=false, wifiStarted=false;
+bool outputsReady=false;
 bool mdnsStarted=false, mdnsAttempted=false;
 uint32_t mdnsAttemptAt=0;
 uint32_t tcpAcceptedAt=0;
@@ -49,7 +50,7 @@ constexpr uint32_t ConfigMagic=0x57535001;
 
 void paint() {
   if (!rmtItems) return;
-  const uint8_t *rgb=core.render();
+  const uint8_t *rgb=core.render(millis());
   size_t start=0;
   for (size_t i=0; i<installedOutputs; ++i) {
     const Output &out=core.outputs[i];
@@ -71,6 +72,7 @@ void paint() {
 }
 void darkness() { core.dark(); paint(); }
 bool installOutputs() {
+  outputsReady=false;
   if (!rmtItems) return false;
   for (size_t i=0;i<installedOutputs;++i) {
     rmt_driver_uninstall(static_cast<rmt_channel_t>(i));
@@ -94,6 +96,7 @@ bool installOutputs() {
     ++installedOutputs;
   }
   paint();
+  outputsReady=true;
   return true;
 }
 bool persist(const Config &next) {
@@ -135,7 +138,7 @@ void addStatus(cJSON *reply,bool detailed) {
   cJSON_AddNumberToObject(reply,"bri",core.brightness);
   if (!detailed) return;
   cJSON_AddStringToObject(reply,"firmware","WESP");
-  cJSON_AddStringToObject(reply,"version","0.1.0");
+  cJSON_AddStringToObject(reply,"version","0.1.1");
   cJSON_AddNumberToObject(reply,"max_milliamps",core.maxMilliamps);
   cJSON_AddNumberToObject(reply,"watchdog_ms",PublishedWatchdogMs);
   cJSON *outputs=cJSON_AddArrayToObject(reply,"outputs");
@@ -253,15 +256,20 @@ void process(const char *line,Transport transport) {
   const char *error=nullptr;
   const char *op=stringField(request,"op");
   bool hello=op && !strcmp(op,"hello");
+  bool freshSession=false;
   Session &session=transport==Transport::USB?usbSession:tcp.session;
   const char *requestedSession=stringField(request,"session");
   const char *requestedMac=stringField(request,"mac");
   if (!integer(field(request,"id"),1,INT32_MAX,id) || !op) error="invalid_request";
   else if ((error=authorizeIdentity(transport,hello,mac,requestedMac,token,stringField(request,"token")))) { /* No session mutation on failed authentication. */ }
-  else if (!session.accept(requestedSession,id,hello,transport==Transport::USB)) error="invalid_session_or_id";
+  else if (!session.accept(requestedSession,id,hello,transport==Transport::USB,&freshSession)) error="invalid_session_or_id";
   else {
     if (transport==Transport::TCP) tcp.authenticated=true;
-    if (hello) { /* Read-only; no lease reset. */ }
+    if (hello) {
+      // Only the first authenticated hello, never polls or failed handshakes.
+      // The bounded status cue does not grant or refresh a frame lease.
+      if (freshSession) core.announceConnected(millis(),outputsReady);
+    }
     else if (!strcmp(op,"pair")) {
       if (transport!=Transport::USB) error="usb_only";
       else if (!nvsReady) error="storage_error";
@@ -320,7 +328,7 @@ void setup() {
   }
   hexToken();
   if (config.outputCount) { core.configure(config.outputs,config.outputCount,config.maxMilliamps); installOutputs(); }
-  core.off(); paint();
+  core.off(); core.announceBoot(millis(),outputsReady); paint();
   joinWifi();
   server.begin(); server.setNoDelay(true);
 }
@@ -349,5 +357,6 @@ void loop() {
     MDNS.end(); mdnsStarted=false; mdnsAttempted=false;
   }
   if (core.tick(millis())) paint();
+  if (core.statusTick(millis())) paint();
   delay(1);
 }

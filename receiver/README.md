@@ -1,4 +1,4 @@
-# WESP native receiver 0.1.0
+# WESP native receiver 0.1.1
 
 ESP32 classic, 4 MiB flash, Arduino ESP32 2.0.14, PlatformIO espressif32
 6.5.0. No WLED code or WLED effects. Build never opens a serial device.
@@ -56,7 +56,7 @@ All replies contain `ok`, `id`, `mac`, `proto:1`. All successful replies include
 ```
 
 `hello` and successful `configure` additionally return `firmware:"WESP"`,
-`version:"0.1.0"`, `outputs`, `max_milliamps`, `watchdog_ms:1500`, and
+`version:"0.1.1"`, `outputs`, `max_milliamps`, `watchdog_ms:1500`, and
 `wifi:{configured,connected,ip,host}`. The stable host is
 `wesp-<last-six-MAC-hex>.local`, with mDNS service `_wesp._tcp` port 19447.
 Registration starts after Wi-Fi joins, without waiting for DNS clients.
@@ -98,11 +98,28 @@ expiry is 1200 ms, reserving 300 ms for bounded loop/RMT delivery within the
 published 1500 ms target; physical timing still requires board verification. Wi-Fi
 loss darkens a TCP-owned output immediately when the link event is observed.
 
+## Startup and connection indication
+
+Saved valid outputs show one dim amber runner at power-up. The first accepted
+hello in a new authorized session shows one green runner; repeated status/hello
+requests in the same session do not repeat it. Wi-Fi association alone is not a
+WESP connection. An active frame owner suppresses a new connection indication.
+Each output runs its full length in 700 ms, with a head capped at 20/255 and two
+fading tail pixels. A green pass may follow an ongoing amber pass once.
+
+These bounded cues are the only exception to ordinary darkness without PC
+frames. They do not change On, raw PC pixels, frame ownership, lastFrame or the
+watchdog. Incoming frames keep updating while a cue is displayed; the latest
+valid frame appears afterward. Off and frame expiry cancel current and queued
+cues immediately. No output pins are guessed when the configuration is empty.
+The implementation uses the existing loop/RMT path, without delay or NVS writes.
+
 Brightness is applied before a conservative 20 mA/full-scale RGB-channel
 budget (60 mA/full-white pixel). Integer-floor scaling cannot exceed that
 LED-only budget. RMT transmission time is bounded by the total 1024 pixels
 (about 31 ms); input is processed in 512-byte chunks and socket sends never
-wait for an unresponsive PC. Boot/reset initializes saved outputs dark.
+wait for an unresponsive PC. Boot/reset initializes saved outputs dark before
+starting the bounded amber indication.
 
 ## Verification boundary
 
@@ -110,6 +127,8 @@ Native C++ safety tests use the same core as the firmware and run under
 AddressSanitizer and UndefinedBehaviorSanitizer. They cover strict RGB count
 and encoding, bad pins/duplicates, current limiting, off/resume, watchdog,
 owner/session isolation, USB session reopening, stale IDs and partial/oversize
-line handling. PlatformIO compilation verifies the actual ESP32 build.
+line handling. Animation tests cover timing/queue expiry, different output lengths,
+Off/watchdog precedence, frame retention, counter wrap and the current budget.
+PlatformIO compilation verifies the actual ESP32 build.
 These checks do not establish physical LED, Wi-Fi or separate-power acceptance;
 those require the specifically authorized board and user-supplied Wi-Fi setup.

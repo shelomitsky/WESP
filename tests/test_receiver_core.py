@@ -44,16 +44,22 @@ class ReceiverCoreTest(unittest.TestCase):
                 self.assertEqual(image["size"], len(data))
                 self.assertEqual(image["sha256"], hashlib.sha256(data).hexdigest())
 
-    def test_native_safety_contract(self):
+    def compile_and_run(self,source):
         with tempfile.TemporaryDirectory(prefix="wesp-core-") as directory:
             executable = pathlib.Path(directory) / "core-test"
             result = subprocess.run([
                 "g++", "-std=c++11", "-Wall", "-Wextra", "-Werror",
                 "-fsanitize=address,undefined", "-fno-omit-frame-pointer",
                 "-I", str(ROOT / "receiver/include"),
-                str(ROOT / "receiver/tests/core_test.cpp"), "-o", str(executable),
+                str(ROOT / "receiver/tests" / source), "-o", str(executable),
             ], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             result = subprocess.run([str(executable)], capture_output=True, text=True,
                                     env={**os.environ, "ASAN_OPTIONS": "detect_leaks=0"})
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_native_safety_contract(self):
+        self.compile_and_run('core_test.cpp')
+
+    def test_native_status_animation(self):
+        self.compile_and_run('status_test.cpp')

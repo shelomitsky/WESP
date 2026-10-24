@@ -92,14 +92,21 @@ and standard slideshow following are already implemented.
   verified status replies. Settings survive the power cycle.
 - [x] Verify real lighting from the separate USB supply: the owner confirmed
   both strips fully illuminated during a 20-second dim blue test.
+- [x] React to desktop music on both strips over Wi-Fi, confirmed by the owner.
+- [x] With the TCP socket still open, stop PC frames for three seconds: both
+  strips darken automatically and recover when frames resume, confirmed by the owner.
 - [ ] Exercise hostname/IP fallback recovery after DHCP or DNS changes.
-- [ ] Stop the PC sender and measure physical dark within the 1.5-second target.
+- [ ] Measure physical darkness timing against the 1.5-second target.
 - [ ] Test reboot, USB/network interruptions, wrong identity and configuration recovery.
+- [ ] Firmware 0.1.1: verify amber startup, green new-session welcome, quiet
+  repeated status polling, immediate Off and frame-loss behavior on the board.
 
 The owner confirmed the widget installation/configuration and separate USB supply
 steps. Status checks verified identity and retained settings after that power
 cycle. The owner then connected the strips and accepted the dim blue output
-test. Physical darkness timing remains unmeasured.
+test, music reaction and functional frame-loss/recovery test on firmware 0.1.0.
+Physical darkness timing remains unmeasured. Firmware 0.1.1 welcome animations
+require their separate physical acceptance above.
 
 ESP32 compile and native host/safety tests do not close these physical gates.
 The previously accepted WLED board must remain unchanged.
