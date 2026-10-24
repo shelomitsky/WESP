@@ -2,7 +2,7 @@ import json
 import socket
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch,Mock
 import tempfile
 from pathlib import Path
 
@@ -55,6 +55,36 @@ class Receiver:
 
 
 class TransportTests(unittest.TestCase):
+    def test_usb_hello_waits_for_boot_and_discards_boot_bytes(self):
+        events=[]
+        stream=Mock()
+        stream.open.side_effect=lambda:events.append('open')
+        stream.reset_input_buffer.side_effect=lambda:events.append('discard boot bytes')
+        device=wesp.Device(port='/dev/fake',discover=True)
+        def hello(op):
+            self.assertEqual(events,['open','settle','discard boot bytes'])
+            return dict(firmware='WESP')
+        with patch('serial.Serial',return_value=stream), \
+             patch.object(wesp.time,'sleep',side_effect=lambda delay:events.append('settle')), \
+             patch.object(device,'_exchange',side_effect=hello):
+            device.connect()
+        device.close()
+
+    def test_minimal_state_ack_keeps_metadata_and_setup_gets_fresh_wifi(self):
+        joined=[False]
+        def reply(req,document):
+            if req['op']=='hello':
+                document['wifi']=dict(configured=True,connected=joined[0],ip='192.0.2.2' if joined[0] else '')
+            else:
+                for key in ('firmware','outputs','color','watchdog_ms'):
+                    document.pop(key,None)
+        device,server=self.device(reply)
+        device.query()
+        self.assertEqual(device.document.get('firmware'),'WESP')
+        joined[0]=True
+        self.assertTrue(device.setup_status()['wifi']['connected'])
+        self.assertEqual(server.requests[-1]['op'],'hello')
+
     def setUp(self):
         self.assertIsNotNone(wesp, 'native transport must be implemented')
         self.temp = tempfile.TemporaryDirectory()

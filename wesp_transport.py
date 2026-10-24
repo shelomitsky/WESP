@@ -188,6 +188,10 @@ class Device:
                 self.serial.dtr = self.serial.rts = False
                 self.serial.port = self.port
                 self.serial.open()
+                # CP2102 boards may reset as the port opens. Wait for firmware
+                # startup, then discard ROM/banner bytes before the first hello.
+                time.sleep(2)
+                self.serial.reset_input_buffer()
             reply = self._exchange('hello')
             if reply.get('firmware') != 'WESP':
                 raise ValueError('WESP receiver firmware is required')
@@ -234,18 +238,20 @@ class Device:
                     raise ValueError('WESP rejected the request')
                 if type(reply.get('on')) is not bool or type(reply.get('bri')) is not int or not 0 <= reply['bri'] <= 255:
                     raise ValueError('Invalid WESP state response')
-                self.document = {key: copy.deepcopy(reply[key]) for key in
-                    ('mac', 'proto', 'count', 'firmware', 'version', 'outputs', 'max_milliamps', 'wifi', 'on', 'bri', 'color', 'watchdog_ms') if key in reply}
+                allowed=('mac','proto','count','firmware','version','outputs','max_milliamps','wifi','on','bri','color','watchdog_ms')
+                previous=self.document or {}
+                self.document={key:copy.deepcopy(previous[key]) for key in allowed if key in previous}
+                self.document.update({key:copy.deepcopy(reply[key]) for key in allowed if key in reply})
                 # Never retain arbitrary firmware fields (especially pair token).
-                wifi = reply.get('wifi', {})
-                if isinstance(wifi, dict):
+                wifi = reply.get('wifi')
+                if 'wifi' in reply and isinstance(wifi, dict):
                     self.document['wifi'] = dict(configured=wifi.get('configured') is True,
                                                  connected=wifi.get('connected') is True,
                                                  ip=wifi.get('ip') if isinstance(wifi.get('ip'), str) and len(wifi['ip']) <= 45 and re.fullmatch(r'[0-9a-fA-F:.]*', wifi['ip']) else '')
                     stable_host = 'wesp-' + self.expected_mac[-6:] + '.local'
                     if wifi.get('host') == stable_host:
                         self.document['wifi']['host'] = stable_host
-                else:
+                elif 'wifi' in reply:
                     self.document['wifi'] = {}
                 if self.color is None and 'color' in reply:
                     self.color = _rgb(reply['color'])
@@ -395,7 +401,9 @@ class Device:
 
     def setup_status(self):
         with self.query_lock:
-            self.query()
+            # State/frame ACKs intentionally contain only the common fields.
+            # Request full current metadata, including asynchronous Wi-Fi join.
+            self._run('hello')
             return {key: copy.deepcopy(self.document[key]) for key in
                     ('mac', 'count', 'outputs', 'max_milliamps', 'wifi', 'firmware', 'version', 'watchdog_ms')
                     if key in self.document}
