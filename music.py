@@ -11,7 +11,7 @@ class BeatPulse:
         self.last = None
         self.last_beat = float('-inf')
 
-    def process(self, bass, gate, now=None):
+    def process(self, bass, gate, now=None,repeat_ms=0,drive=None):
         if not math.isfinite(bass) or bass < 0 or not math.isfinite(gate) or gate < 0:
             raise ValueError('Expected finite nonnegative bass and gate')
         now = time.monotonic() if now is None else now
@@ -24,6 +24,7 @@ class BeatPulse:
         self.envelope *= math.exp(-elapsed/.18)
         onset = (bass > max(gate, .003) and bass > self.history*1.7
                  and bass > self.previous*1.25 and now-self.last_beat >= .18)
+        if repeat_ms and max(bass,drive or 0)>max(gate,.003) and now-self.last_beat>=repeat_ms/1000:onset=True
         if onset:
             self.envelope, self.last_beat = 1.0, now
         self.history += (bass-self.history)*(1-math.exp(-min(elapsed,.2)/.35))
@@ -48,7 +49,7 @@ class Renderer:
         self.analyzer.set_response(prefs.get('equalizer_sensitivity',100),prefs.get('equalizer_gate',6))
         self.analyzer.set_attack(prefs.get('equalizer_attack_ms',0))
         self.analyzer.process(samples)
-        self.pulse.process(self.analyzer.bass,self.analyzer.gate,now)
+        self.pulse.process(self.analyzer.bass,self.analyzer.gate,now,prefs.get('music_repeat_ms',1000),getattr(self.analyzer,'rms',0)*.8)
 
     def pixels(self,prefs,sections,count,colors=None):
         style = prefs.get('music_style','meter')

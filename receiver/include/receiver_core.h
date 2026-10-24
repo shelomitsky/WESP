@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include "effects_engine.h"
 
 namespace wesp {
 constexpr size_t MaxPixels = 1024;
@@ -114,6 +115,17 @@ class Core {
   StatusCue statusCue=StatusCue::None;
   bool queuedConnection=false;
   uint32_t statusStarted=0,lastStatusPaint=0;
+  uint32_t lastEffectPaint=0;
+  bool effectsReady=false;
+  bool nativeActive() const { return effects.mode!=FxMode::None; }
+  uint32_t leaseMs() const { return nativeActive() && effects.mode!=FxMode::Music?effects.config.wallpaperTimeout:WatchdogMs; }
+  bool sameOwner(Transport transport,const char *session) const { return owner==transport && !strcmp(ownerSession,session); }
+  bool claim(Transport transport,uint32_t now,const char *session) {
+    tick(now);
+    if (!on || !validSession(session)) return false;
+    if (owner!=Transport::None && !sameOwner(transport,session) && uint32_t(now-lastFrame)<leaseMs()) return false;
+    owner=transport;memcpy(ownerSession,session,17);lastFrame=now;clearStatus();return true;
+  }
   void clearStatus() { statusCue=StatusCue::None; queuedConnection=false; }
   void advanceStatus(uint32_t now) {
     if (statusCue==StatusCue::None || uint32_t(now-statusStarted)<700) return;
@@ -124,30 +136,59 @@ class Core {
     clearStatus();
   }
 public:
+  EffectsEngine effects;
   Output outputs[8]{};
   size_t outputCount=0, count=0;
   uint32_t maxMilliamps=500, lastFrame=0;
   Transport owner=Transport::None;
   bool on=false;
   uint8_t brightness=255;
-  void dark() { memset(raw,0,sizeof(raw)); hasFrame=false; owner=Transport::None; ownerSession[0]=0; clearStatus(); }
+  void dark() { memset(raw,0,sizeof(raw)); hasFrame=false;owner=Transport::None;ownerSession[0]=0;clearStatus();effects.reset(); }
   void off() { on=false; dark(); }
   bool configure(const Output *out, size_t n, uint32_t ma) {
     if (!validOutputs(out,n,ma)) return false;
     off(); outputCount=n; count=0; maxMilliamps=ma;
     for (size_t i=0;i<n;++i) { outputs[i]=out[i]; count+=out[i].count; }
+    effectsReady=validEffects(effects.config,count);
     return true;
+  }
+  bool configureEffects(const EffectsConfig &next) {
+    if (!validEffects(next,count)) return false;
+    // CFG changes parameters, never frame ownership, input time or power.
+    effects.config=next;memcpy(effects.palette,next.presets[next.active].colors,sizeof(effects.palette));
+    effectsReady=true;return true;
+  }
+  bool effectRevision(const char *revision) const { return effectsReady && revision && !strcmp(revision,effects.config.revision); }
+  bool audio(float rms,float bass,Transport transport,uint32_t now,const char *session,const char *revision) {
+    if (!effectRevision(revision) || !isfinite(rms) || !isfinite(bass) || rms<0 || rms>1 || bass<0 || bass>1 || !claim(transport,now,session)) return false;
+    hasFrame=false;effects.audio(rms,bass,now);return true;
+  }
+  bool startEffect(FxMode mode,const uint8_t *color,Transport transport,uint32_t now,const char *session,const char *revision) {
+    if ((mode!=FxMode::Solid && mode!=FxMode::Runner) || !color || !effectRevision(revision) || !claim(transport,now,session)) return false;
+    hasFrame=false;effects.start(mode,color,now);return true;
+  }
+  bool keepalive(Transport transport,uint32_t now,const char *session,const char *revision) {
+    if (!on || !nativeActive() || effects.mode==FxMode::Music || !effectRevision(revision) || !sameOwner(transport,session) || uint32_t(now-lastFrame)>=leaseMs()) return false;
+    lastFrame=now;effects.fade=1;return true;
+  }
+  bool event(FxEvent kind,const char *ref,float value,Transport transport,uint32_t now,const char *session,const char *revision) {
+    if (!on || !nativeActive() || !effectRevision(revision) || !sameOwner(transport,session) || !isfinite(value) || value<0 || value>1 || uint32_t(now-lastFrame)>=leaseMs()) return false;
+    return effects.event(kind,ref,value,now); // Events never renew the base lease.
+  }
+  bool setPalette(const uint8_t colors[10][3],Transport transport,const char *session,const char *revision) {
+    if (!on || !nativeActive() || !sameOwner(transport,session) || !effectRevision(revision)) return false;
+    memcpy(effects.palette,colors,sizeof(effects.palette));return true;
   }
   bool announceBoot(uint32_t now,bool outputsReady) {
     advanceStatus(now);
-    if (!outputsReady || !count || owner!=Transport::None || statusCue!=StatusCue::None) return false;
+    if (!outputsReady || !count || owner!=Transport::None || nativeActive() || statusCue!=StatusCue::None) return false;
     statusCue=StatusCue::Boot; statusStarted=now; lastStatusPaint=now-20;
     return true;
   }
   bool announceConnected(uint32_t now,bool outputsReady) {
     advanceStatus(now);
     // A new handshake must not obscure an already active stream/owner.
-    if (!outputsReady || !count || owner!=Transport::None || statusCue==StatusCue::Connected) return false;
+    if (!outputsReady || !count || owner!=Transport::None || nativeActive() || statusCue==StatusCue::Connected) return false;
     if (statusCue==StatusCue::Boot) {
       if (queuedConnection) return false;
       queuedConnection=true; return true;
@@ -163,10 +204,22 @@ public:
     lastStatusPaint=now; return true;
   }
   bool tick(uint32_t now) {
-    if (owner!=Transport::None && uint32_t(now-lastFrame)>=WatchdogMs) { dark(); return true; }
+    if (owner!=Transport::None || nativeActive()) {
+      uint32_t age=uint32_t(now-lastFrame),deadline=leaseMs();
+      if (age>=deadline) {
+        if (nativeActive() && effects.mode!=FxMode::Music && effects.config.wallpaperFade && age-deadline<effects.config.wallpaperFade)
+          effects.fade=1-float(age-deadline)/effects.config.wallpaperFade;
+        else { dark();return true; }
+      }
+      if (nativeActive() && uint32_t(now-lastEffectPaint)>=20) { lastEffectPaint=now;return true; }
+    }
     return false;
   }
-  void disconnect(Transport transport, const char *session="") { if (owner==transport && !strcmp(ownerSession,session)) dark(); }
+  void disconnect(Transport transport, const char *session="") {
+    if (!sameOwner(transport,session)) return;
+    if (nativeActive() && effects.mode!=FxMode::Music) { owner=Transport::None;ownerSession[0]=0; }
+    else dark();
+  }
   bool frame(const char *encoded, size_t n, Transport transport, uint32_t now, const char *session="") {
     if (!count || n!=count || strlen(encoded)!=count*4) return false;
     // RGB lengths are a multiple of three: padding and whitespace are invalid.
@@ -174,6 +227,7 @@ public:
     if (!on) return true; // Explicit off discards data without acquiring a lease.
     tick(now);
     if (owner!=Transport::None && (owner!=transport || strcmp(ownerSession,session))) return false;
+    effects.reset();
     for (size_t i=0; i<count; ++i) {
       const char *s=encoded+i*4;
       uint32_t word=(uint32_t(b64(s[0]))<<18)|(uint32_t(b64(s[1]))<<12)|(uint32_t(b64(s[2]))<<6)|uint32_t(b64(s[3]));
@@ -198,6 +252,9 @@ public:
         }
         start+=outputs[i].count;
       }
+    } else if (on && nativeActive()) {
+      effects.render(rendered,count,now);
+      for (size_t i=0;i<count*3;++i) rendered[i]=uint16_t(rendered[i])*brightness/255;
     } else if (on && hasFrame) {
       for (size_t i=0;i<count*3;++i) rendered[i]=(uint16_t(raw[i])*brightness)/255;
     }

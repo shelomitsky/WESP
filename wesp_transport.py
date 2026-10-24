@@ -3,6 +3,8 @@ import base64
 import copy
 import json
 import ipaddress
+import math
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -138,6 +140,11 @@ class Device:
         self.sequence = self.reply_sequence = self.frame_sequence = 0
         self.last_exchange = {}
         self.last_frame = None
+        self.last_scene = None
+        self.last_event_ref = {}
+        self.last_palette = None
+        self.last_heartbeat = 0
+        self.audio_sequence = 0
         self.color = None
         self.last_frame_at = 0
         self.needs_handshake = False
@@ -167,6 +174,8 @@ class Device:
         self._buffer.clear()
         self.updated = 0
         self.last_frame = None
+        self.last_scene = None
+        self.last_palette = None
 
     def connect(self):
         if self.serial is not None or self.sock is not None:
@@ -244,13 +253,20 @@ class Device:
                     raise ValueError('WESP rejected the request')
                 if type(reply.get('on')) is not bool or type(reply.get('bri')) is not int or not 0 <= reply['bri'] <= 255:
                     raise ValueError('Invalid WESP state response')
-                allowed=('mac','proto','count','firmware','version','outputs','max_milliamps','wifi','capabilities','on','bri','color','watchdog_ms')
+                allowed=('mac','proto','count','firmware','version','outputs','max_milliamps','wifi','capabilities','effects','ota_trial','build_sha256','on','bri','color','watchdog_ms')
                 previous={} if op=='hello' else self.document or {}
                 self.document={key:copy.deepcopy(previous[key]) for key in allowed if key in previous}
                 self.document.update({key:copy.deepcopy(reply[key]) for key in allowed if key in reply})
                 if 'capabilities' in reply:
                     caps=reply['capabilities']
-                    self.document['capabilities']={'wifi_configure':isinstance(caps,dict) and caps.get('wifi_configure') is True}
+                    self.document['capabilities']={key:caps.get(key) is True for key in ('wifi_configure','native_effects','ota','preview') if isinstance(caps,dict) and key in caps}
+                    if isinstance(caps,dict) and type(caps.get('max_presets')) is int and 1<=caps['max_presets']<=8:
+                        self.document['capabilities']['max_presets']=caps['max_presets']
+                if 'effects' in reply:
+                    import effects_config
+                    self.document['effects']=effects_config.validate(reply['effects'],self.led_count)
+                if 'build_sha256' in reply and (not isinstance(reply['build_sha256'],str) or not re.fullmatch('[0-9a-f]{64}',reply['build_sha256'])):
+                    raise ValueError('Invalid native build identity')
                 # Never retain arbitrary firmware fields (especially pair token).
                 wifi = reply.get('wifi')
                 if 'wifi' in reply and isinstance(wifi, dict):
@@ -338,15 +354,23 @@ class Device:
                         raise ValueError('Invalid WESP color')
                     fields['color'] = _rgb(colors[0])
         with self.query_lock:
+            if payload is None and self.last_scene and self.native_effects():
+                interval=(self.last_scene['config']['wallpaper_timeout_ms']*.000875 if self.last_scene['mode']!='music' else .25)
+                if time.monotonic()-self.updated<interval:
+                    return self._state()
             self._run('state', fields)
             if 'color' in fields:
                 self.color = fields['color']
             if not self.document['on']:
                 self.last_frame = None
+                self.last_scene = None
             elif fields.get('on') is True or 'color' in fields:
                 # A user action supplies a NEW valid static frame. Polls never
                 # acquire/renew a firmware lease; explicit maintain() does.
-                self.pixels([list(self.color or [0, 0, 0]) for _ in range(self.led_count)])
+                if self.native_effects() and self.document.get('effects'):
+                    if 'color' in fields:self.effect('solid',fields['color'],self.document['effects'])
+                else:
+                    self.pixels([list(self.color or [0, 0, 0]) for _ in range(self.led_count)])
             return self._state()
 
     def state(self, payload=None):
@@ -363,12 +387,21 @@ class Device:
                 return False
             self._run('frame', dict(count=self.led_count, pixels=base64.b64encode(raw).decode('ascii')))
             self.last_frame = raw
+            self.last_scene = None
             self.last_frame_at = time.monotonic()
             self.frame_sequence += 1
             return True
 
     def maintain(self):
         with self.query_lock:
+            if self.last_scene is not None:
+                if not self.document or not self.document['on'] or self.last_scene['mode']=='music':return False
+                interval=self.last_scene['config']['wallpaper_timeout_ms']*.000875
+                if time.monotonic()-self.last_heartbeat<interval:return False
+                sent_at=time.monotonic()
+                self._run('heartbeat',{'revision':self.last_scene['config']['revision']})
+                self.last_heartbeat=sent_at
+                return True
             if self.last_frame is None or self.document is None or not self.document['on'] or time.monotonic()-self.last_frame_at < .5:
                 return False
             raw = self.last_frame
@@ -377,6 +410,119 @@ class Device:
             self.last_frame_at = time.monotonic()
             self.frame_sequence += 1
             return True
+
+    def refresh_interval(self):
+        """Wake at the actual deadline even for the shortest wallpaper lease."""
+        with self.query_lock:
+            if self.last_scene and self.last_scene['mode']!='music':
+                due=self.last_heartbeat+self.last_scene['config']['wallpaper_timeout_ms']*.000875
+                return max(.001,min(.25,due-time.monotonic()))
+            return .25
+
+    def native_effects(self):
+        return bool(self.document and self.document.get('capabilities',{}).get('native_effects'))
+
+    def effects_configure(self,config):
+        import effects_config
+        if self.document and self.document.get('effects')==config:return self.document['effects']
+        clean=effects_config.validate(config,self.led_count)
+        with self.query_lock:
+            self.connect()
+            if not self.native_effects():raise ValueError('Update native firmware to enable local effects')
+            if self.document.get('effects')==clean:return clean
+            self._run('effects_configure',{'effects':clean})
+            actual=self.setup_status().get('effects')
+            if actual!=clean:raise ConfigurationError('configuration_unconfirmed','Native effects configuration read-back failed')
+            if self.last_scene:self.last_scene['config']=copy.deepcopy(clean)
+            self.last_palette=None
+            return actual
+
+    def features(self,rms,bass,config,colors=None):
+        if any(type(n) not in (int,float) or not math.isfinite(n) or not 0<=n<=1 for n in (rms,bass)):
+            raise ValueError('Invalid raw audio features')
+        with self.query_lock:
+            self.connect()
+            if not self.document['on']:return False
+            self.effects_configure(config)
+            self._run('audio',dict(rms=rms,bass=bass,revision=config['revision']))
+            self.last_scene=dict(mode='music',config=copy.deepcopy(config),rms=rms,bass=bass,updated=time.monotonic())
+            self.last_frame=None;self.audio_sequence+=1
+            if colors is not None and colors!=self.last_palette:
+                import effects_config
+                palette=effects_config.colors(colors)
+                self._run('palette',dict(revision=config['revision'],colors=palette))
+                self.last_palette=palette
+            return True
+
+    def effect(self,mode,color,config):
+        color=_rgb(color)
+        if mode not in ('solid','runner'):raise ValueError('Unknown native effect')
+        with self.query_lock:
+            self.connect()
+            if not self.document['on']:return False
+            self.effects_configure(config)
+            if self.last_scene and self.last_scene['mode']==mode and self.last_scene.get('color')==color:return True
+            sent_at=time.monotonic()
+            self._run('effect',dict(mode=mode,color=color,revision=config['revision']))
+            self.color=list(color)
+            self.last_scene=dict(mode=mode,color=color,config=copy.deepcopy(config),updated=time.monotonic())
+            self.last_frame=None;self.last_heartbeat=sent_at
+            return True
+
+    def event(self,kind,ref,value,config):
+        if kind not in ('notification','volume','clear','clear_volume') or not isinstance(ref,str) or not re.fullmatch('[0-9a-f]{16}',ref):
+            raise ValueError('Invalid native event')
+        if type(value) not in (int,float) or not math.isfinite(value) or not 0<=value<=1:raise ValueError('Invalid native event value')
+        with self.query_lock:
+            self.connect()
+            if not self.document['on']:return False
+            self.effects_configure(config)
+            if self.last_event_ref.get(kind)==ref:return True
+            if not self.last_scene:self.effect('solid',list(self.color or [0,0,0]),config)
+            self._run('event',dict(kind=kind,ref=ref,value=value,revision=config['revision']))
+            self.last_event_ref[kind]=ref
+            if kind=='notification':self.last_event_ref.pop('clear',None)
+            if kind=='volume':self.last_event_ref.pop('clear_volume',None)
+            return True
+
+    def ota_upload(self,image,progress=None):
+        if not isinstance(image,bytes) or not 256<=len(image)<=1310720 or image[0]!=0xe9:
+            raise ValueError('Invalid ESP32 application image')
+        with self.query_lock:
+            self.connect()
+            if not self.document.get('capabilities',{}).get('ota'):raise ValueError('Update firmware over USB once to enable OTA')
+            self.query({'on':False})
+            try:
+                started=time.monotonic()
+                self._run('ota_begin',dict(size=len(image),sha256=hashlib.sha256(image).hexdigest()))
+                last=-1
+                for offset in range(0,len(image),1024):
+                    if time.monotonic()-started>60:raise TimeoutError('OTA upload timed out')
+                    chunk=image[offset:offset+1024]
+                    self._run('ota_chunk',dict(offset=offset,data=base64.b64encode(chunk).decode('ascii')))
+                    percent=int((offset+len(chunk))*100/len(image))
+                    if progress and percent!=last:progress(percent);last=percent
+                self._run('ota_finish')
+            except Exception:
+                if self.serial is not None or self.sock is not None:
+                    try:self._exchange('ota_abort')
+                    except Exception:pass
+                raise
+            finally:
+                self._disconnect()
+
+    def preview(self):
+        with self.query_lock:
+            self.connect()
+            if not self.document.get('capabilities',{}).get('preview') or not self.led_count:return None
+            reply=self._run('preview')
+            value=reply.get('pixels')
+            if not isinstance(value,str) or len(value)!=self.led_count*4:raise ValueError('Invalid ESP preview')
+            try:raw=base64.b64decode(value,validate=True)
+            except ValueError:raise ValueError('Invalid ESP preview') from None
+            if len(raw)!=self.led_count*3:raise ValueError('Invalid ESP preview count')
+            return dict(target='device',mac=self.expected_mac,pixels=[list(raw[i:i+3]) for i in range(0,len(raw),3)],
+                        brightness=255,source='esp',updated=time.monotonic(),sequence=self.reply_sequence,stale=False)
 
     def configure(self, outputs, max_milliamps=500, ssid=None, password=None):
         fields = dict(outputs=validate_outputs(outputs, max_milliamps), max_milliamps=max_milliamps)
@@ -437,7 +583,7 @@ class Device:
             finally:
                 self.discover=previous_discover
             result = {key: copy.deepcopy(self.document[key]) for key in
-                      ('mac', 'count', 'outputs', 'max_milliamps', 'wifi', 'capabilities', 'firmware', 'version', 'watchdog_ms')
+                      ('mac', 'count', 'outputs', 'max_milliamps', 'wifi', 'capabilities', 'effects', 'ota_trial', 'build_sha256', 'firmware', 'version', 'watchdog_ms')
                       if key in self.document}
             result['connection'] = self.connection
             return result
@@ -450,6 +596,7 @@ class Device:
             return dict(backend='wesp', connection=self.connection, baud=self.baud,
                         target_baud=self.baud, fallback=False, mac=self.expected_mac,
                         reply_sequence=self.reply_sequence, frame_sequence=self.frame_sequence,
+                        audio_sequence=self.audio_sequence,
                         last_reply_age=round(time.monotonic()-self.updated, 3),
                         last_exchange=self.last_exchange.copy())
 

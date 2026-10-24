@@ -1016,3 +1016,87 @@ msgstr "Запись и проверка прошивки"
 
 msgid "Your paired ESP is available over Wi-Fi. USB is not needed to configure LED outputs."
 msgstr "Привязанная ESP доступна по Wi-Fi. Настраивать выходы лент можно без USB."
+
+msgid "Checking the updated ESP"
+msgstr "Проверка обновлённой ESP"
+
+msgid "Choose a preset action"
+msgstr "Выберите действие с пресетом"
+
+msgid "Choose a saved preset"
+msgstr "Выберите сохранённый пресет"
+
+msgid "Colors read from the ESP. Preview requests stop when this window closes."
+msgstr "Цвета прочитаны с ESP. При закрытии окна запросы предпросмотра прекращаются."
+
+msgid "Confirmation interval: %1 seconds"
+msgstr "Подтверждение каждые %1 с"
+
+msgid "ESP preview"
+msgstr "Предпросмотр с ESP"
+
+msgid "ESP update confirmed"
+msgstr "Обновление ESP подтверждено"
+
+msgid "ESP update could not be confirmed"
+msgstr "Не удалось подтвердить обновление ESP"
+
+msgid "Enter a preset name up to 32 characters"
+msgstr "Введите имя пресета длиной до 32 символов"
+
+msgid "Fade duration, seconds"
+msgstr "Длительность затухания, с"
+
+msgid "Five custom presets are already saved"
+msgstr "Уже сохранено пять пользовательских пресетов"
+
+msgid "Invalid saved presets"
+msgstr "Некорректные сохранённые пресеты"
+
+msgid "Load preset"
+msgstr "Применить пресет"
+
+msgid "Music and signals are rendered on the ESP."
+msgstr "Музыку и сигналы отрисовывает ESP."
+
+msgid "Music is rendered on this computer."
+msgstr "Музыку отрисовывает компьютер."
+
+msgid "Preparing Wi-Fi update"
+msgstr "Подготовка обновления по Wi-Fi"
+
+msgid "Preset name"
+msgstr "Имя пресета"
+
+msgid "Repeat on steady sound, ms (0 disables)"
+msgstr "Повтор на ровном звуке, мс (0 — выкл.)"
+
+msgid "Repeated pulses must be at least 180 ms apart"
+msgstr "Интервал повторных импульсов должен быть не меньше 180 мс"
+
+msgid "Save preset"
+msgstr "Сохранить пресет"
+
+msgid "Saved on this computer. ESP settings could not be confirmed; reconnect and save again."
+msgstr "Сохранено на компьютере. Не удалось подтвердить настройки ESP; восстановите связь и сохраните ещё раз."
+
+msgid "Saved presets"
+msgstr "Сохранённые пресеты"
+
+msgid "The update keeps your settings and leaves lighting off. First OTA setup requires one USB update."
+msgstr "Обновление сохраняет настройки и оставляет подсветку выключенной. Для первого запуска OTA нужно одно обновление по USB."
+
+msgid "Unknown preset action"
+msgstr "Неизвестное действие с пресетом"
+
+msgid "Update firmware over Wi-Fi"
+msgstr "Обновить прошивку по Wi-Fi"
+
+msgid "Uploading firmware over Wi-Fi"
+msgstr "Загрузка прошивки по Wi-Fi"
+
+msgid "Wait for connection, seconds"
+msgstr "Ожидание подтверждения, с"
+
+msgid "Wallpaper connection timeout"
+msgstr "Отключение подсветки обоев при потере связи"

@@ -15,6 +15,7 @@ def phase(prefs,mem,now):
     elapsed=now-start
     if elapsed<0:
         return None
+    if mem.get('nativeEffects') and elapsed>=(2.4 if prefs.get('notify_style')=='pulse' else 1.6):return None
     if prefs.get('notify_style','flash')=='flash' and elapsed>=1.6:
         return None
     return elapsed

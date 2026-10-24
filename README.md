@@ -11,7 +11,7 @@ Author: **Chapman**. Licensed under MIT. Please credit Chapman when sharing
 screenshots, builds or articles about this project; retain the copyright and
 license notices when distributing its code.
 
-**0.2.0-alpha.10: local release candidate.** Includes a standalone Qt application,
+**0.2.0-alpha.11: local release candidate.** Includes a standalone Qt application,
 transport-free music demo, coherent Pulse style, music presets, bounded strip checks
 and output configuration over Wi-Fi for native firmware 0.1.2. Generalized device/layout support and
 the new installer have automated checks. A fresh KDE session and physical LEDs
@@ -30,7 +30,9 @@ optional quick remote; **Open WESP** activates the same single application windo
 Closing the window leaves the desktop services running.
 
 **Try without an ESP** listens to the computer's audio output and uses the same
-music analysis and section renderer. Its power, brightness and tuning are
+desktop music analysis and section renderer. Native ESP rendering is checked
+with the C++ software bench and read back from the ESP in live device mode.
+Its power, brightness and tuning are
 temporary and isolated from a real controller, including one already running.
 It never opens a device or changes the saved controller, network or pairing.
 The demo ends when the window closes. There is no microphone or screen capture.
@@ -340,3 +342,50 @@ the persistent styles run while an active notification remains.
 After upgrading an existing installation, reload the Plasma widget (for example
 `systemctl --user restart plasma-plasmashell.service`). Desktop services are
 managed by the installer; keep its printed backup path for rollback.
+
+## Native music, presets and OTA (receiver0.2.0)
+
+On a native receiver0.2.0, WESP transmits unsmoothed RMS/bass instead of computing
+individual music pixels. The ESP handles adaptive gain, gate, attack/decay,
+meter/Pulse, repeated impulses on steady sound, and finite signal animations.
+Audio continues during notification/volume overlays; completion reveals current
+music. Off cancels all animation. A music/frame lease still expires at1200ms.
+
+Music controls and named presets are transferred over the selected paired USB or
+Wi-Fi route and confirmed by a separate read-back. There are three built-in
+configuration slots and five custom presets in this candidate. Presets contain
+tuning, palette and effect parameters; no controller identity or network secrets.
+The independent NVS effect key does not change the hardware/network config blob.
+
+For static desktop/wallpaper lighting, a changed color is sent once. Confirmations
+use7/8 of the configured connection timeout, measured from send time:8s means7s.
+The separate fade duration begins after expiry. Status and preview reads, effect
+configuration and event animation do not renew the base lease. Closing WESP's
+window stops preview requests while desktop services continue.
+
+In Connection, switch the paired receiver to Wi-Fi and use **Update firmware over
+Wi-Fi**. The update stops strip calibration, leaves output off, verifies the image
+and writes the inactive app slot. After reboot, WESP requires the exact build,
+preserved output/effect configuration and a trial boot before confirming it.
+An unconfirmed candidate rolls back after60s. Transfer interruption does not select
+an incomplete image. Physical rollover/recovery acceptance is recorded separately
+in RELEASE_CHECKLIST.md; builds and tests alone do not establish that acceptance.
+The native local-network transport uses the existing pairing token and is not
+encrypted; no OTA endpoint is exposed to the internet by WESP.
+
+### Software bench (development)
+
+The bench needs g++ with C++11 and Python. It compiles the same receiver_core.h
+and effects_engine.h used on the board into a private temporary library; it never
+opens USB, Wi-Fi or audio. Production WESP does not require a C++ compiler.
+
+```
+python3 -m unittest discover -s tests -p test_native_bench.py -v
+python3 native_sim.py --count 20 < timeline.jsonl
+```
+
+JSON-line operations are configure(effects), power(on), audio(rms,bass),
+event(kind,ref,value), solid(color), heartbeat and frame. at is a monotonic uint32
+millisecond timestamp supplied by the timeline. Replies contain the result or a
+fixed input error. This makes deterministic sound/event/timeout tests possible
+before hardware testing.

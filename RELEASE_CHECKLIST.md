@@ -1,6 +1,6 @@
 # Release candidate acceptance
 
-Product: WESP. Version: 0.2.0-alpha.10. Author: Chapman. License: MIT.
+Product: WESP. Version: 0.2.0-alpha.11. Author: Chapman. License: MIT.
 The first alpha targets KDE Plasma 6; the product name is desktop-independent.
 
 ## Standalone application — alpha.8
@@ -159,3 +159,19 @@ hello, Off and frame-expiry cancellation, but physical timing remains open.
 
 ESP32 compile and native host/safety tests do not close these physical gates.
 The previously accepted WLED board must remain unchanged.
+
+## Native execution and OTA — alpha.11
+
+- [x] Local C++ effects/lease/OTA-policy tests and actual-core software bench.
+- [x] TCP fixtures: raw feature-only audio, one-shot event,7/8 heartbeat, CFG
+  read-back, image chunk ordering/hash and on-demand ESP preview.
+- [x] Actual Qt controls: named preset save while Off, preview does not starve
+  status or disable controls; legacy Qt setup remains a separate regression gate.
+- [x] Independent final review; two P2 findings fixed with failing regressions:
+  heartbeat send timestamp and refused OTA worker remaining queued.
+- [ ] Final full release/Qt/native build and GitHub CI on final commit.
+- [ ] Physical app-only0.1.1→0.2.0 update with full backup and retained pairing.
+- [ ] Two-strip music, finite signal/volume overlays and current-music resumption.
+- [ ] Wallpaper heartbeat/fade, Off, silence and source-loss checks using camera.
+- [ ] CFG/presets persist across reboot; OTA trial→valid and unconfirmed rollback
+  demonstrated on the identified board. No power-cut test has been performed.

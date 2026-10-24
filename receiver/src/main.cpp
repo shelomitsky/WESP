@@ -8,10 +8,15 @@
 #include <lwip/sockets.h>
 #include <math.h>
 #include "receiver_core.h"
+#include "effects_protocol.h"
+#include "ota_receiver.h"
 
 using namespace wesp;
 namespace {
 Core core;
+OtaReceiver ota;
+EffectsConfig savedEffects{};
+bool haveEffects=false;
 Preferences preferences;
 WiFiServer server(19447);
 WiFiClient client;
@@ -138,11 +143,25 @@ void addStatus(cJSON *reply,bool detailed) {
   cJSON_AddNumberToObject(reply,"bri",core.brightness);
   if (!detailed) return;
   cJSON_AddStringToObject(reply,"firmware","WESP");
-  cJSON_AddStringToObject(reply,"version","0.1.2");
+  cJSON_AddStringToObject(reply,"version","0.2.0");
   cJSON *capabilities=cJSON_AddObjectToObject(reply,"capabilities");
   cJSON_AddBoolToObject(capabilities,"wifi_configure",true);
+  cJSON_AddBoolToObject(capabilities,"native_effects",true);
+  cJSON_AddBoolToObject(capabilities,"ota",true);
+  cJSON_AddBoolToObject(capabilities,"preview",true);
+  cJSON_AddNumberToObject(capabilities,"max_presets",MaxFxPresets);
+  cJSON_AddBoolToObject(reply,"ota_trial",ota.trial);
+  const esp_partition_t *running=esp_ota_get_running_partition();
+  if (running) cJSON_AddStringToObject(reply,"boot_slot",running->label);
+  esp_app_desc_t description{};
+  if (running && esp_ota_get_partition_description(running,&description)==ESP_OK) {
+    char build[65]{};for (size_t i=0;i<32;++i) snprintf(build+i*2,3,"%02x",description.app_elf_sha256[i]);
+    cJSON_AddStringToObject(reply,"build_sha256",build);
+  }
+  if (haveEffects && validEffects(savedEffects,core.count)) cJSON_AddItemToObject(reply,"effects",effectsJson(savedEffects));
   cJSON_AddNumberToObject(reply,"max_milliamps",core.maxMilliamps);
   cJSON_AddNumberToObject(reply,"watchdog_ms",PublishedWatchdogMs);
+  cJSON_AddItemToObject(reply,"color",fxJsonRgb(color));
   cJSON *outputs=cJSON_AddArrayToObject(reply,"outputs");
   for (size_t i=0;i<core.outputCount;++i) {
     cJSON *output=cJSON_CreateObject();
@@ -158,7 +177,7 @@ void addStatus(cJSON *reply,bool detailed) {
   cJSON_AddStringToObject(wifi,"ip",connected?WiFi.localIP().toString().c_str():"");
   cJSON_AddStringToObject(wifi,"host",wifiHost);
 }
-void sendReply(Transport transport,int id,const char *error=nullptr,bool detailed=false,bool pair=false) {
+void sendReply(Transport transport,int id,const char *error=nullptr,bool detailed=false,bool pair=false,bool preview=false) {
   cJSON *reply=cJSON_CreateObject();
   if (!reply) return;
   cJSON_AddBoolToObject(reply,"ok",error==nullptr);
@@ -166,7 +185,15 @@ void sendReply(Transport transport,int id,const char *error=nullptr,bool detaile
   cJSON_AddStringToObject(reply,"mac",mac);
   cJSON_AddNumberToObject(reply,"proto",1);
   if (error) cJSON_AddStringToObject(reply,"error",error);
-  else { addStatus(reply,detailed); if (pair) cJSON_AddStringToObject(reply,"token",token); }
+  else {
+    addStatus(reply,detailed);if (pair) cJSON_AddStringToObject(reply,"token",token);
+    if (preview && core.count) {
+      char *pixels=static_cast<char *>(malloc(core.count*4+1));size_t length=0;
+      if (pixels && !mbedtls_base64_encode(reinterpret_cast<unsigned char *>(pixels),core.count*4+1,&length,core.render(millis()),core.count*3))
+        cJSON_AddStringToObject(reply,"pixels",pixels);
+      free(pixels);
+    }
+  }
   char *serialized=cJSON_PrintUnformatted(reply);
   if (serialized) {
     size_t length=strlen(serialized);
@@ -181,18 +208,17 @@ void sendReply(Transport transport,int id,const char *error=nullptr,bool detaile
     } else if (tcp.present) {
       // WiFiClient::write can retry for seconds, and its inherited
       // availableForWrite() returns zero. One nonblocking socket send is bounded.
-      char packet[2048];
-      if (length+1<sizeof(packet)) {
-        memcpy(packet,serialized,length); packet[length]='\n';
-      }
-      int sent=length+1<sizeof(packet)?::send(client.fd(),packet,length+1,MSG_DONTWAIT):-1;
+      char *packet=length+1<MaxLine?static_cast<char *>(malloc(length+1)):nullptr;
+      if (packet) { memcpy(packet,serialized,length);packet[length]='\n'; }
+      int sent=packet?::send(client.fd(),packet,length+1,MSG_DONTWAIT):-1;
+      free(packet);
       if (sent!=int(length+1)) { client.stop(); core.disconnect(Transport::TCP,tcp.session.value); paint(); }
     }
     cJSON_free(serialized);
   }
   cJSON_Delete(reply);
 }
-char usbPending[2048]{};
+char usbPending[MaxLine+1]{};
 size_t usbPendingLength=0, usbPendingOffset=0;
 bool queueUsbReply(const char *reply) {
   size_t length=strlen(reply);
@@ -279,6 +305,49 @@ void process(const char *line,Transport transport) {
       // The bounded status cue does not grant or refresh a frame lease.
       if (freshSession) core.announceConnected(millis(),outputsReady);
     }
+    else if (!strncmp(op,"ota_",4)) {
+      if (!strcmp(op,"ota_begin")) { core.off();paint(); }
+      if (!strcmp(op,"ota_confirm") && (!nvsReady || !outputsReady)) error="ota_self_test_failed";
+      else error=ota.process(op,request,transport,requestedSession,core);
+    }
+    else if (ota.active() && strcmp(op,"state")) error="ota_busy";
+    else if (!strcmp(op,"preview")) { /* A read never renews the lease. */ }
+    else if (!strcmp(op,"effects_configure")) {
+      EffectsConfig next{};
+      if (!parseEffects(field(request,"effects"),next,core.count)) error="invalid_effects";
+      else if (ota.trial) error="confirm_ota_before_configure";
+      else {
+        bool changed=!haveEffects || memcmp(&savedEffects,&next,sizeof(next));
+        if (changed && (!nvsReady || preferences.putBytes("effects",&next,sizeof(next))!=sizeof(next))) error="storage_error";
+        else {
+          if (changed || !core.effectRevision(next.revision)) core.configureEffects(next);
+          savedEffects=next;haveEffects=true;
+        }
+      }
+    }
+    else if (!strcmp(op,"audio")) {
+      const cJSON *rms=field(request,"rms"),*bass=field(request,"bass");
+      if (!cJSON_IsNumber(rms) || !cJSON_IsNumber(bass) || !core.audio(rms->valuedouble,bass->valuedouble,transport,millis(),requestedSession,stringField(request,"revision"))) error="invalid_audio_or_busy";
+    }
+    else if (!strcmp(op,"effect")) {
+      const char *mode=stringField(request,"mode");uint8_t rgb[3]{};
+      if (!mode || (strcmp(mode,"solid") && strcmp(mode,"runner")) || !fxRgb(field(request,"color"),rgb) ||
+          !core.startEffect(!strcmp(mode,"solid")?FxMode::Solid:FxMode::Runner,rgb,transport,millis(),requestedSession,stringField(request,"revision"))) error="invalid_effect_or_busy";
+      else memcpy(color,rgb,3);
+    }
+    else if (!strcmp(op,"heartbeat")) {
+      if (!core.keepalive(transport,millis(),requestedSession,stringField(request,"revision"))) error="invalid_heartbeat";
+    }
+    else if (!strcmp(op,"event")) {
+      const char *kind=stringField(request,"kind");const char *const kinds[]={"notification","volume","clear","clear_volume"};int k=fxChoice(kind,kinds,4);
+      const cJSON *value=field(request,"value");float amount=cJSON_IsNumber(value)?value->valuedouble:0;
+      if (k<0 || (value && !cJSON_IsNumber(value)) || !core.event(static_cast<FxEvent>(k),stringField(request,"ref"),amount,transport,millis(),requestedSession,stringField(request,"revision"))) error="invalid_event";
+    }
+    else if (!strcmp(op,"palette")) {
+      const cJSON *colors=field(request,"colors");uint8_t next[10][3]{};bool valid=cJSON_IsArray(colors) && cJSON_GetArraySize(colors)==10;
+      for (int i=0;valid && i<10;++i) valid=fxRgb(cJSON_GetArrayItem(colors,i),next[i]);
+      if (!valid || !core.setPalette(next,transport,requestedSession,stringField(request,"revision"))) error="invalid_palette";
+    }
     else if (!strcmp(op,"pair")) {
       if (transport!=Transport::USB) error="usb_only";
       else if (!nvsReady) error="storage_error";
@@ -288,7 +357,7 @@ void process(const char *line,Transport transport) {
     } else if (!strcmp(op,"state")) {
       const cJSON *on=field(request,"on"), *bri=field(request,"bri"), *rgb=field(request,"color");
       int brightness=core.brightness, components[3]={color[0],color[1],color[2]};
-      if ((on && !cJSON_IsBool(on)) || (bri && !integer(bri,0,255,brightness))) error="invalid_state";
+      if ((on && !cJSON_IsBool(on)) || (bri && !integer(bri,0,255,brightness)) || (ota.active() && on && cJSON_IsTrue(on))) error="invalid_state";
       if (rgb) {
         if (!cJSON_IsArray(rgb) || cJSON_GetArraySize(rgb)!=3) error="invalid_state";
         else for (size_t i=0;i<3;++i) if (!integer(cJSON_GetArrayItem(rgb,i),0,255,components[i])) error="invalid_state";
@@ -305,7 +374,7 @@ void process(const char *line,Transport transport) {
       else paint();
     } else error="unsupported_op";
   }
-  sendReply(transport,id,error,hello || (op && !strcmp(op,"configure")),op && !strcmp(op,"pair") && !error);
+  sendReply(transport,id,error,hello || (op && (!strcmp(op,"configure") || !strcmp(op,"effects_configure"))),op && !strcmp(op,"pair") && !error,op && !strcmp(op,"preview"));
   cJSON_Delete(request);
 }
 void input(Stream &stream,LineReader &reader,Transport transport) {
@@ -318,6 +387,7 @@ void input(Stream &stream,LineReader &reader,Transport transport) {
   reader.expire(millis());
 }
 }
+extern "C" bool verifyRollbackLater(void) { return true; }
 void setup() {
   Serial.setRxBufferSize(16384);
   Serial.begin(921600);
@@ -337,11 +407,16 @@ void setup() {
   }
   hexToken();
   if (config.outputCount) { core.configure(config.outputs,config.outputCount,config.maxMilliamps); installOutputs(); }
+  if (nvsReady && preferences.getBytesLength("effects")==sizeof(savedEffects) && preferences.getBytes("effects",&savedEffects,sizeof(savedEffects))==sizeof(savedEffects) && validEffects(savedEffects,core.count)) {
+    haveEffects=true;core.configureEffects(savedEffects);
+  }
+  ota.boot();
   core.off(); core.announceBoot(millis(),outputsReady); paint();
   joinWifi();
   server.begin(); server.setNoDelay(true);
 }
 void loop() {
+  ota.tick();
   if (core.tick(millis())) paint();
   flushUsb();
   input(Serial,usbLine,Transport::USB);
@@ -355,7 +430,7 @@ void loop() {
   }
   if (tcp.present) input(client,tcpLine,Transport::TCP);
   if (tcp.present && !tcp.authenticated && uint32_t(millis()-tcpAcceptedAt)>=2000) client.stop();
-  if (wifiStarted && WiFi.status()!=WL_CONNECTED && core.owner==Transport::TCP) darkness();
+  if (wifiStarted && WiFi.status()!=WL_CONNECTED && core.owner==Transport::TCP) { core.disconnect(Transport::TCP,tcp.session.value);paint(); }
   if (core.tick(millis())) paint();
   if (wifiStarted && WiFi.status()==WL_CONNECTED && !mdnsStarted && (!mdnsAttempted || uint32_t(millis()-mdnsAttemptAt)>=5000)) {
     mdnsAttemptAt=millis(); mdnsAttempted=true;

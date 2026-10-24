@@ -28,6 +28,47 @@ class DesktopWindowTest(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QGuiApplication.instance() or QGuiApplication([])
 
+    def test_native_preview_does_not_make_controls_busy_or_starve_full_status(self):
+        import desktop
+        class Model:
+            demo=None
+            def __init__(self):self.polls=0
+            def poll(self):
+                self.polls+=1
+                return dict(target='device',native_effects=True,settings={},state={'on':True})
+            def preview_frame(self):return {'source':'esp','pixels':[[1,2,3]]}
+            def close(self):pass
+        model=Model();bridge=desktop.AppBridge(model);self.addCleanup(bridge.close);bridge.timer.stop()
+        bridge.receive(dict(action='poll',ok=True,data=model.poll()))
+        bridge.device_ticks=13;bridge.refresh()
+        self.assertFalse(bridge.busy,'read-only preview must not disable controls')
+        deadline=time.monotonic()+2
+        while bridge._busy and time.monotonic()<deadline:self.app.processEvents();time.sleep(.01)
+        bridge.refresh()
+        deadline=time.monotonic()+2
+        while bridge._busy and time.monotonic()<deadline:self.app.processEvents();time.sleep(.01)
+        self.assertEqual(model.polls,2,'full status must still run after the preview interval')
+
+    def test_named_preset_save_from_real_window_keeps_power_off(self):
+        import control,desktop,desktop_bridge
+        class Backend:
+            def command(self,args):
+                if args[0]=='firmware-status':return {'ok':True,'firmware':{}}
+                return control.execute(args)
+        with tempfile.TemporaryDirectory() as folder,patch.object(control,'CONFIG',Path(folder)),patch.object(control,'RUNTIME',Path(folder)/'runtime'):
+            model=desktop_bridge.DesktopModel(Backend());engine,bridge=desktop.create_window(model);self.addCleanup(bridge.close)
+            window=engine.rootObjects()[0];window.setProperty('page',1)
+            field=window.findChild(QObject,'presetNameField');self.assertIsNotNone(field)
+            field.setProperty('text','Evening')
+            QMetaObject.invokeMethod(window.findChild(QObject,'savePresetButton'),'click')
+            deadline=time.monotonic()+2
+            while time.monotonic()<deadline and not control.settings()['native_presets']:
+                self.app.processEvents();time.sleep(.01)
+            self.assertEqual(control.settings()['native_presets'][0]['name'],'Evening')
+            self.assertFalse(control.settings()['equalizer'])
+            self.assertFalse((control.CONFIG/'credentials.json').exists())
+            window.close()
+
     def test_paired_wifi_receiver_can_be_read_and_configured_without_usb(self):
         import control,desktop,desktop_bridge
         class Backend:

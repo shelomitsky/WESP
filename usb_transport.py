@@ -33,7 +33,7 @@ def adalight(pixels):
     return b'Ada' + bytes([high, low, high ^ low ^ 0x55]) + bytes(v for rgb in pixels for v in rgb)
 
 
-def client(payload=None, pixels=None, link=False, baud=None, enroll=None, expected=None, calibration=None):
+def client(payload=None, pixels=None, link=False, baud=None, enroll=None, expected=None, calibration=None,native=None):
     message = dict(kind='pixels', pixels=pixels) if pixels is not None else dict(kind='state', payload=payload)
     if link:
         message = dict(kind='link')
@@ -41,6 +41,8 @@ def client(payload=None, pixels=None, link=False, baud=None, enroll=None, expect
         message = dict(kind='baud', baud=baud)
     if calibration is not None:
         message = dict(kind='calibration',calibration=calibration)
+    if native is not None:
+        message=dict(kind='native',native=native)
     if enroll is not None:
         message = dict(kind='enroll', port=enroll)
         if expected is not None:
@@ -53,7 +55,7 @@ def client(payload=None, pixels=None, link=False, baud=None, enroll=None, expect
         message['controller_mac']=selected['mac']
         message['controller_count']=selected['count']
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-        connection.settimeout(12 if baud is not None or enroll is not None else 4)
+        connection.settimeout(120 if native and native.get('action')=='ota' else 12 if baud is not None or enroll is not None else 4)
         try:
             connection.connect(str(socket_path()))
         except OSError as error:
@@ -70,6 +72,39 @@ def require_target(command,device):
     if (command.get('controller_mac') != device.expected_mac
             or command.get('controller_count') != device.led_count):
         raise ValueError(tr("The selected controller changed; reconnect"))
+
+
+def native_request(device,fields,prefs):
+    """One owner handles both transports; None explicitly means old firmware."""
+    import wesp_transport,effects_config
+    if not isinstance(device,wesp_transport.Device):return None
+    device.connect()
+    if fields.get('action')=='metadata':return dict(device.document.get('capabilities',{}))
+    if fields.get('action')=='ota':
+        import ota_update
+        return ota_update.perform(device,fields.get('id'))
+    if not device.native_effects():return None
+    action=fields.get('action')
+    if action=='capabilities':return True
+    config=effects_config.cached(prefs)
+    if action=='configure':device.effects_configure(config);return True
+    if action=='audio':return device.features(fields['rms'],fields['bass'],config,fields.get('colors'))
+    if action in ('apply','volume'):
+        if not device.document['on']:return False
+        device.effects_configure(config)
+        if not prefs.get('equalizer'):
+            device.effect('solid',fields['color'],config)
+        elif not device.last_scene:
+            device.features(0,0,config)
+        if action=='volume':return device.event('volume',fields['ref'],fields['value'],config)
+        if fields.get('notification'):
+            device.event('notification',fields['notification'],0,config)
+        else:
+            device.event('clear',fields['clear_ref'],0,config)
+        if not prefs.get('volume'):
+            device.event('clear_volume',fields['clear_ref'],0,config)
+        return True
+    raise ValueError('Unknown native effect action')
 
 
 class Device:
@@ -382,7 +417,7 @@ def serve():
         nonlocal device
         import wesp_transport
         action=command.get('action')
-        if action not in ('probe','status','configure','wifi'):
+        if action not in ('probe','status','configure','wifi','preview'):
             raise ValueError('Unknown receiver setup action')
         with control.locked():
             with device_lock:
@@ -411,6 +446,8 @@ def serve():
                     raise ValueError('Select and read the WESP receiver first')
                 if action=='status':
                     return device.setup_status(refresh_count=True)
+                if action=='preview':
+                    return {'frame':device.preview()}
                 target=device
                 if action=='configure':
                     wesp_transport.validate_outputs(command.get('outputs'),command.get('max_milliamps',500))
@@ -499,6 +536,13 @@ def serve():
                                     LOG.debug('Preview metadata unavailable',exc_info=True)
                         elif command['kind']=='link':
                             result=device.link_status()
+                        elif command['kind']=='native':
+                            action=command['native'].get('action')
+                            if action=='ota':cancel_calibration()
+                            if calibration_status()['active'] and action not in ('capabilities','metadata'):
+                                result=False
+                            else:
+                                result=native_request(device,command['native'],control.settings())
                         elif command['kind']=='calibration':
                             import first_light
                             fields=command['calibration']
@@ -545,6 +589,7 @@ def serve():
     def refresh():
         last_query=0
         while not stop.is_set():
+            delay=.25
             try:
                 with device_lock:
                     if device is not None:
@@ -565,11 +610,21 @@ def serve():
                         if calibration[0] is None or time.monotonic()-last_query>=interval:
                             device.query()
                             last_query=time.monotonic()
+                        if (calibration[0] is None and hasattr(device,'native_effects') and device.native_effects()
+                                and device.last_scene is None and device.last_frame is None and device.state()['on']):
+                            current=control.settings();memory=control.runtime()
+                            if ((current.get('controller') or {}).get('mac')==device.expected_mac
+                                    and not current.get('equalizer') and not memory.get('suspended')
+                                    and not memory.get('firstLight')):
+                                color=control.kde_color() if current.get('kde') else list(device.color or [0,0,0])
+                                native_request(device,{'action':'apply','color':color,'notification':None,'clear_ref':'0000000000000000'},current)
+                        delay=(.05 if calibration[0] else device.refresh_interval() if hasattr(device,'refresh_interval')
+                               else .25 if hasattr(device,'maintain') else 1)
             except Exception:
                 with device_lock:
                     cancel_calibration(blank=False)
                 LOG.exception('USB state refresh failed; retrying')
-            wake.wait(.05 if calibration[0] else .25 if device is not None and hasattr(device,'maintain') else 1)
+            wake.wait(delay)
             wake.clear()
 
     def finish(*_):

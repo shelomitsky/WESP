@@ -1,4 +1,20 @@
-# 0.2.0-alpha.10 (candidate)
+# 0.2.0-alpha.11 (candidate)
+
+- Native receiver0.2.0 runs music envelopes, meter/Pulse, steady-tone repeats,
+  finite notification animations and volume overlays locally. Desktop sends raw
+  RMS/bass at up to20Hz, with the legacy frame path retained for WLED/old firmware.
+- Transfer versioned settings and presets over the paired connection with exact
+  read-back; add five named user presets alongside three built-in tuning slots.
+- Wallpaper colors change on demand; confirmations run at7/8 of the configured
+  timeout, followed by a separate fade duration when the lease expires.
+- Add a software bench compiling the exact firmware core for local timelines.
+- Fetch actual ESP-rendered preview pixels only while the standalone window is
+  open; no duplicate real-time renderer is required on the desktop.
+- Add paired Wi-Fi OTA to the inactive app slot, ordered chunks and SHA256,
+  explicit post-boot build/configuration checks and unconfirmed-boot rollback.
+  Existing native firmware needs one USB update to acquire OTA support.
+
+# 0.2.0-alpha.10
 
 - Add dim, bounded direction/RGB checks for individual saved strips, with
   owner-driven expiry, Stop/Off and an isolated virtual demo.

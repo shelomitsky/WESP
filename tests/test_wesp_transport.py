@@ -55,6 +55,102 @@ class Receiver:
 
 
 class TransportTests(unittest.TestCase):
+    def effects_peer(self):
+        stored={}
+        def respond(request,reply):
+            reply['capabilities']={'native_effects':True,'wifi_configure':True,'ota':True,'max_presets':8}
+            if request['op']=='effects_configure':stored['effects']=request['effects']
+            if request['op']=='hello':reply.update(stored)
+        return self.device(respond)
+
+    def fx_config(self):
+        import effects_config,layout
+        return effects_config.from_preferences({'controller':{'count':2},'sections':layout.legacy(2)})
+
+    def test_native_audio_sends_raw_features_and_config_once_without_rgb_frames(self):
+        device,peer=self.effects_peer();device.query({'on':True})
+        peer.requests.clear()
+        config=self.fx_config()
+        self.assertTrue(device.features(.2,.3,config))
+        self.assertTrue(device.features(.4,.1,config))
+        self.assertEqual([r['op'] for r in peer.requests],['effects_configure','hello','audio','audio'])
+        self.assertEqual(peer.requests[-1]['rms'],.4)
+        self.assertEqual(peer.requests[-1]['bass'],.1)
+        self.assertNotIn('pixels',json.dumps(peer.requests))
+        self.assertEqual(device.setup_status()['effects'],config)
+
+    def test_wallpaper_heartbeat_is_seven_eighths_and_off_cannot_resume_it(self):
+        device,peer=self.effects_peer();device.query({'on':True})
+        config=self.fx_config()
+        with patch.object(wesp.time,'monotonic',return_value=100):
+            self.assertTrue(device.effect('solid',[1,2,3],config))
+        peer.requests.clear()
+        with patch.object(wesp.time,'monotonic',return_value=106.9):self.assertFalse(device.maintain())
+        with patch.object(wesp.time,'monotonic',return_value=107):self.assertTrue(device.maintain())
+        self.assertEqual([r['op'] for r in peer.requests],['heartbeat'])
+        device.query({'on':False});peer.requests.clear()
+        with patch.object(wesp.time,'monotonic',return_value=120):self.assertFalse(device.maintain())
+        self.assertEqual(peer.requests,[])
+
+    def test_native_event_is_one_command_and_duplicate_does_not_restart_it(self):
+        device,peer=self.effects_peer();device.query({'on':True});config=self.fx_config()
+        device.features(.2,.2,config);peer.requests.clear()
+        self.assertTrue(device.event('notification','123456789abcdef0',0,config))
+        self.assertTrue(device.event('notification','123456789abcdef0',0,config))
+        device.features(.3,.1,config)
+        self.assertEqual([r['op'] for r in peer.requests],['event','audio'])
+
+    def test_ota_upload_is_off_first_sequential_and_hashes_exact_image(self):
+        import base64,hashlib
+        device,peer=self.effects_peer();device.query({'on':True});peer.requests.clear()
+        image=b'\xe9'+b'firmware'*400;progress=[]
+        device.ota_upload(image,progress.append)
+        ops=[r['op'] for r in peer.requests]
+        self.assertEqual(ops[:2],['state','ota_begin'])
+        self.assertFalse(peer.requests[0]['on'])
+        self.assertEqual(peer.requests[1]['sha256'],hashlib.sha256(image).hexdigest())
+        offset=0;actual=b''
+        for r in peer.requests[2:-1]:
+            self.assertEqual(r['op'],'ota_chunk');self.assertEqual(r['offset'],offset)
+            chunk=base64.b64decode(r['data']);self.assertLessEqual(len(chunk),1024)
+            offset+=len(chunk);actual+=chunk
+        self.assertEqual(actual,image);self.assertEqual(ops[-1],'ota_finish')
+        self.assertEqual(progress[-1],100)
+
+    def test_preview_reads_esp_pixels_without_sending_frames_or_renewing_lease(self):
+        import base64
+        def respond(request,reply):
+            reply['capabilities']={'native_effects':True,'preview':True}
+            if request['op']=='preview':reply['pixels']=base64.b64encode(bytes([1,2,3,4,5,6])).decode()
+        device,peer=self.device(respond)
+        result=device.preview()
+        self.assertEqual(result['pixels'],[[1,2,3],[4,5,6]])
+        self.assertEqual(result['brightness'],255)
+        self.assertEqual(result['source'],'esp')
+        self.assertEqual([r['op'] for r in peer.requests],['hello','preview'])
+
+    def test_cfg_change_does_not_replay_old_audio_or_renew_its_timestamp(self):
+        import effects_config,copy
+        device,peer=self.effects_peer();device.query({'on':True});config=self.fx_config()
+        with patch.object(wesp.time,'monotonic',return_value=100):device.features(.2,.2,config)
+        peer.requests.clear();changed=copy.deepcopy(config)
+        changed['presets'][0]['sensitivity']=110;changed['revision']=effects_config.revision(changed)
+        with patch.object(wesp.time,'monotonic',return_value=100.1):device.effects_configure(changed)
+        self.assertEqual([r['op'] for r in peer.requests],['effects_configure','hello'])
+        self.assertEqual(device.last_scene['updated'],100)
+
+    def test_heartbeat_schedule_uses_send_time_even_when_ack_is_delayed(self):
+        device=wesp.Device(host='127.0.0.1',connection='wifi',expected_mac=MAC,led_count=2)
+        device.document={'on':True};device.last_scene={'mode':'solid','config':{'wallpaper_timeout_ms':2000,'revision':'1'*16}}
+        device.last_heartbeat=0;clock=[1.75]
+        def exchange(*args):clock[0]+=.3
+        with patch.object(wesp.time,'monotonic',side_effect=lambda:clock[0]),patch.object(device,'_run',side_effect=exchange):
+            self.assertTrue(device.maintain())
+            self.assertEqual(device.last_heartbeat,1.75)
+            clock[0]=3.5
+            self.assertTrue(device.maintain())
+
+
     def test_usb_reads_available_reply_without_waiting_for_full_buffer(self):
         clock=[0.0]
         class Serial:

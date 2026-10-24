@@ -1,4 +1,4 @@
-# WESP native receiver 0.1.2
+# WESP native receiver 0.2.0
 
 ESP32 classic, 4 MiB flash, Arduino ESP32 2.0.14, PlatformIO espressif32
 6.5.0. No WLED code or WLED effects. Build never opens a serial device.
@@ -58,7 +58,7 @@ All replies contain `ok`, `id`, `mac`, `proto:1`. All successful replies include
 ```
 
 `hello` and successful `configure` additionally return `firmware:"WESP"`,
-`version:"0.1.2"`, `capabilities:{wifi_configure:true}`, `outputs`,
+`version:"0.2.0"`, `capabilities:{wifi_configure:true}`, `outputs`,
 `max_milliamps`, `watchdog_ms:1500`, and
 `wifi:{configured,connected,ip,host}`. The stable host is
 `wesp-<last-six-MAC-hex>.local`, with mDNS service `_wesp._tcp` port 19447.
@@ -142,3 +142,44 @@ Off/watchdog precedence, frame retention, counter wrap and the current budget.
 PlatformIO compilation verifies the actual ESP32 build.
 These checks do not establish physical LED, Wi-Fi or separate-power acceptance;
 those require the specifically authorized board and user-supplied Wi-Fi setup.
+
+## Native effects extension (0.2.0)
+
+hello adds native_effects/preview/ota capabilities, build_sha256 (ELF identity)
+and ota_trial. effects, when present, is a schema1 configuration with revision,
+up to128 compact [start,count,reverse] sections, up to8 presets, active preset ID,
+wallpaper_timeout_ms (1500..60000), wallpaper_fade_ms (0..10000), and notification
+style/color/strength/duration. Presets contain ID, meter/pulse, ten palette colors,
+sensitivity50..200, gate0..30, attack_ms0..300, decay_ms80..600,
+repeat_ms0 or180..5000. Configuration lives in a separate NVS key and is written
+only when changed; color/audio/event runtime state stays in RAM.
+
+effects_configure validates the complete object before persistence, echoes full
+metadata, and is followed by an independent hello read-back. CFG changes neither
+power nor last input time. All commands retain ordinary MAC/token/session checks.
+- audio(revision,rms,bass): finite values0..1 before gain/envelope, fresh music lease.
+- effect(revision,mode,color): solid or runner, fresh wallpaper-class lease.
+- heartbeat(revision): renews an existing unexpired non-music lease for its owner.
+- event(revision,kind,ref,value): notification, volume, clear or clear_volume.
+  References are16 lowercase hex; duplicates do not restart an animation.
+  Events never renew the underlying source lease. Volume has priority; a pending
+  notification starts afterward while audio continues updating underneath.
+- palette(revision,colors): transient ten-color palette update, no NVS write.
+- preview: read current rendered RGB as base64, including brightness/current cap;
+  no lease renewal. The desktop requests this only for an open live preview.
+
+## Paired OTA extension
+
+ota_begin(size,sha256), ordered ota_chunk(offset,data) with up to1024 decoded
+bytes, ota_finish and ota_abort update only the inactive app slot. The receiver
+checks exact length, SHA256 and ESP image validity before selecting it for boot.
+A stalled transfer aborts after10s; output is off before flash erase begins.
+USB remains available for recovery. Hardware/network/effects NVS keys are retained.
+
+The pinned SDK enables app rollback. verifyRollbackLater is overridden so Arduino
+does not confirm a candidate before WESP can validate it. A pending boot requires
+explicit ota_confirm within60s, with NVS and output initialization ready. WESP
+checks MAC, ELF build identity/version and unchanged outputs/effects first. A
+failed/unconfirmed boot reverts to the previous slot. This mechanism still needs
+physical validation against the actual installed bootloader for each supported
+upgrade path; successful policy tests are not evidence of physical rollback.

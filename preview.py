@@ -80,7 +80,7 @@ class DemoSession:
     def __init__(self, prefs=None):
         import music
         allowed = ('equalizer_decay_ms', 'equalizer_sensitivity', 'equalizer_gate',
-                   'equalizer_attack_ms', 'equalizer_palette','music_style','music_preset','music_custom')
+                   'equalizer_attack_ms', 'equalizer_palette','music_style','music_preset','music_custom','music_repeat_ms')
         self.prefs = {key: copy.deepcopy((prefs or {}).get(key, control.DEFAULTS[key])) for key in allowed}
         self.prefs.update(equalizer=True,kde=False)
         self.sections = layout.legacy(20, reverse_second=True)

@@ -18,6 +18,7 @@ class DeviceBackend:
     COMMANDS = {'status', 'config', 'ports', 'power', 'brightness', 'setting', 'layout',
                 'enroll', 'clear', 'notify-preview', 'firmware-status','scene','music-preset',
                 'first-light','first-light-stop',
+                'preset-save','preset-load','preset-delete','ota-start','ota-status',
                 'firmware-prepare', 'firmware-prepare-native', 'firmware-install',
                 'firmware-cancel', 'firmware-connect', 'firmware-native-ready'}
 
@@ -35,7 +36,7 @@ class DeviceBackend:
         return value
 
     def setup(self, action, fields):
-        if action not in ('probe', 'status', 'configure', 'wifi'):
+        if action not in ('probe', 'status', 'configure', 'wifi','preview'):
             raise ValueError(tr('Unsupported application command'))
         public_error=tr('Could not configure the receiver. Check the connection and output settings, then read the settings again.')
         try:
@@ -139,6 +140,7 @@ class DesktopModel:
         self.setup_note=''
         self.wifi_verified=False
         self.pending_probe=None
+        self.action_warning=''
 
     def read_pending_receiver(self):
         if not self.pending_probe:
@@ -158,6 +160,12 @@ class DesktopModel:
         if self.demo is not None:
             return 'demo'
         return 'device:' + str((control.settings().get('controller') or {}).get('mac', ''))
+
+    def preview_frame(self):
+        selected=control.settings().get('controller') or {}
+        if selected.get('backend')!='wesp':return None
+        try:return self.backend.setup('preview',{'mac':selected['mac']})['receiver']['frame']
+        except Exception:return None
 
     def set_demo(self, enabled, capture=True):
         if self.audio:
@@ -216,6 +224,7 @@ class DesktopModel:
                 self.setup_note=tr('Using Wi-Fi. You can move the ESP to a separate power supply.')
         else:
             result = self.backend.command([action, *args])
+            self.action_warning=result.get('warning','')
             if action == 'ports':
                 self.ports = result['ports']
             if action in ('enroll', 'firmware-connect'):
@@ -247,16 +256,28 @@ class DesktopModel:
                     receiver={}, ports=[], firmware={},setup_error='',setup_note='',wifi_verified=False)
         prefs = control.settings()
         selected = prefs.get('controller') or {}
+        import ota_update
+        ota=ota_update.status()
+        if ota.get('mac')!=selected.get('mac'):ota={'stage':'idle'}
+        labels={'queued':tr('Preparing Wi-Fi update'),'uploading':tr('Uploading firmware over Wi-Fi'),
+                'restarting':tr('Checking the updated ESP'),'complete':tr('ESP update confirmed'),
+                'failed':tr('ESP update could not be confirmed')}
+        ota['label']=labels.get(ota.get('stage'),'')
+        ota_busy=ota.get('stage') in ota_update.ACTIVE
         data = dict(target='device', configured=bool(selected), online=False, settings=prefs,
                     sections=prefs.get('sections', []), state={'on': False, 'bri': 128},
                     frame=preview.read(control.RUNTIME / 'frame-preview.json', selected.get('mac')),
-                    receiver=self.receiver, ports=self.ports, error='', message='', firmware={},
-                    calibration={'active':False},setup_error=self.setup_error,setup_note=self.setup_note,
+                    receiver=self.receiver, ports=self.ports, error=self.action_warning, message='', firmware={},ota=ota,
+                    calibration={'active':False},setup_error=self.setup_error,setup_note=self.setup_note,native_effects=False,
                     wifi_verified=self.wifi_verified)
-        if selected:
+        if ota_busy:
+            data['frame']=None
+        if selected and not ota_busy:
             try:
                 result = self.backend.command(['status'])
                 data.update(state=result['state'], online=True,
+                            native_effects=result.get('native_effects',False),
+                            native_capabilities=result.get('native_capabilities',{}),
                             activity=result.get('activity',{}),
                             calibration=result.get('calibration',{'active':False}),
                             message=(result.get('equalizer') or {}).get('message', ''))

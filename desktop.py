@@ -66,7 +66,7 @@ class AppBridge(QObject):
 
     @Property(bool, notify=busyChanged)
     def busy(self):
-        return self._busy and bool(self.queue or self.current_action != 'poll')
+        return self._busy and bool(self.queue or self.current_action not in ('poll','preview'))
 
     @Slot(str, result=str)
     def text(self, message):
@@ -119,25 +119,33 @@ class AppBridge(QObject):
     def refresh(self):
         if self._busy or self._closed:
             return
+        native_preview=False
         if not self.queue and self.model.demo is None:
             # Device status is deliberately slower than the local frame preview.
             if getattr(self, 'device_ticks', 0) < 14:
                 self.device_ticks = getattr(self, 'device_ticks', 0) + 1
                 import preview
                 current = json.loads(self._data)
+                if current.get('native_effects'):
+                    native_preview=True
                 selected = (current.get('settings') or {}).get('controller') or {}
                 frame = preview.read(control.RUNTIME / 'frame-preview.json', selected.get('mac'))
-                if frame != current.get('frame'):
+                if not native_preview and frame != current.get('frame'):
                     current['frame'] = frame
                     self._data = json.dumps(current)
                     self.changed.emit()
-                return
-            self.device_ticks = 0
-        action, args, target, generation = self.queue.popleft() if self.queue else ('poll', [], None, self.generation)
+                if not native_preview:return
+            else:
+                self.device_ticks = 0
+        action, args, target, generation = self.queue.popleft() if self.queue else ('preview' if native_preview else 'poll', [], None, self.generation)
         self.current_action, self._busy = action, True
         self.busyChanged.emit()
         def work():
             try:
+                if action=='preview':
+                    current=json.loads(self._data)
+                    current['frame']=self.model.preview_frame()
+                    return dict(action='poll',ok=True,data=current,generation=generation)
                 if action == 'demo':
                     self.model.set_demo(bool(args[0]), capture=self.demo_capture)
                 elif action != 'poll':

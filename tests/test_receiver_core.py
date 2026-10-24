@@ -27,7 +27,7 @@ class ReceiverCoreTest(unittest.TestCase):
                 self.assertEqual(command[0], "test-pio")
                 compiled = pathlib.Path(env["PLATFORMIO_BUILD_DIR"]) / "esp32"
                 compiled.mkdir(parents=True)
-                for name in ("bootloader.bin", "partitions.bin", "firmware.bin"):
+                for name in ("bootloader.bin", "partitions.bin", "firmware.bin", "firmware.elf"):
                     (compiled / name).write_bytes(name.encode())
                 boot = pathlib.Path(env["PLATFORMIO_CORE_DIR"]) / "packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
                 boot.parent.mkdir(parents=True)
@@ -63,3 +63,9 @@ class ReceiverCoreTest(unittest.TestCase):
 
     def test_native_status_animation(self):
         self.compile_and_run('status_test.cpp')
+
+    def test_native_effects_and_scene_leases(self):
+        self.compile_and_run('effects_test.cpp')
+
+    def test_native_ota_transfer_contract(self):
+        self.compile_and_run('ota_test.cpp')

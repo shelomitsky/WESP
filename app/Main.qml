@@ -33,12 +33,14 @@ ApplicationWindow {
     readonly property bool nativeSelected: (prefs.controller || {}).backend==="wesp"
     readonly property bool usbSetup: setupPath!==0 || !nativeSelected || (prefs.controller || {}).connection!=="wifi"
     readonly property bool receiverWifi: receiver.connection==="wifi"
-    readonly property bool canConfigure: !!receiver.mac && (!receiverWifi || !!(receiver.capabilities || {}).wifi_configure)
+    readonly property var ota: data.ota || ({})
+    readonly property bool otaBusy: ["queued","uploading","restarting"].indexOf(ota.stage)>=0
+    readonly property bool canConfigure: !!receiver.mac && !otaBusy && (!receiverWifi || !!(receiver.capabilities || {}).wifi_configure)
     readonly property var calibration: data.calibration || ({active:false})
     readonly property bool canTest: (demo || !!data.online) && !!state.on && !layoutDirty && !bridge.busy && !calibration.active
     readonly property string outputError: validateOutputs()
     readonly property var job: data.firmware || ({})
-    readonly property bool firmwareBusy: ["starting","tools","download","detecting","backup","writing","connecting"].indexOf(job.stage) >= 0
+    readonly property bool firmwareBusy: otaBusy || ["starting","tools","download","detecting","backup","writing","connecting"].indexOf(job.stage) >= 0
     function t(message) { return bridge.text(message); }
     function setting(key,value) { bridge.action("setting",[key,String(value)]); }
     function editSection(index,key,value) {
@@ -126,7 +128,7 @@ ApplicationWindow {
                 }
                 Item { Layout.fillHeight:true }
                 Button { text:root.demo ? root.t("Back to my device") : root.t("Try without an ESP"); Layout.fillWidth:true; enabled:!bridge.busy; onClicked:bridge.setDemo(!root.demo) }
-                Label { text:root.demo ? root.t("Demo — your device is unchanged") : "0.2.0-alpha.10"; wrapMode:Text.WordWrap; Layout.fillWidth:true; opacity:.6 }
+                Label { text:root.demo ? root.t("Demo — your device is unchanged") : "0.2.0-alpha.11"; wrapMode:Text.WordWrap; Layout.fillWidth:true; opacity:.6 }
             }
         }
         ColumnLayout {
@@ -166,7 +168,7 @@ ApplicationWindow {
                             Button { objectName:"calmSceneButton";text:root.t("Calm light");checkable:true;checked:!root.prefs.equalizer && !!root.prefs.kde;enabled:root.demo || root.data.online;onClicked:bridge.action("scene",["calm"]) }
                             Item { Layout.fillWidth:true }
                             ComboBox { enabled:!!root.prefs.equalizer;model:[root.t("Level meter"),root.t("Pulse")];currentIndex:root.prefs.music_style==="pulse" ? 1 : 0;onActivated:root.setting("music_style",currentIndex ? "pulse" : "meter") }
-                            Label { text:root.demo ? root.t("Live demo") : root.t("Host frame preview"); opacity:.6 }
+                            Label { text:root.demo ? root.t("Live demo") : root.data.native_effects ? root.t("ESP preview") : root.t("Host frame preview"); opacity:.6 }
                         }
                         Label { text:(root.data.activity || {}).label || root.data.message || root.t("Desktop lighting"); wrapMode:Text.WordWrap; Layout.fillWidth:true; font.pixelSize:17 }
                         Label { visible:!!root.prefs.equalizer; text:root.data.message || ""; opacity:.65;wrapMode:Text.WordWrap;Layout.fillWidth:true }
@@ -201,20 +203,40 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        Label { text:root.demo ? root.t("Listening to the computer output. No microphone or device connection.") : root.data.frame && !root.data.frame.stale ? root.t("Calculated colors; actual delivery and power limits are separate.") : root.t("No recent frame — start music lighting to see the preview."); opacity:.6; wrapMode:Text.WordWrap; Layout.fillWidth:true }
+                        Label { text:root.demo ? root.t("Listening to the computer output. No microphone or device connection.") : (root.data.frame || {}).source==="esp" ? root.t("Colors read from the ESP. Preview requests stop when this window closes.") : root.data.frame && !root.data.frame.stale ? root.t("Calculated colors; actual delivery and power limits are separate.") : root.t("No recent frame — start music lighting to see the preview."); opacity:.6; wrapMode:Text.WordWrap; Layout.fillWidth:true }
                     }
                 }
                 ScrollView {
                     clip:true; contentWidth:availableWidth
                     ColumnLayout {
-                        width:parent.width; spacing:18
+                        width:parent.width; spacing:18;enabled:!root.otaBusy
                         Switch { text:root.t("React to desktop music");checked:!!root.prefs.equalizer;onClicked:bridge.action("scene",[checked ? "music" : "calm"]) }
+                        Label { text:root.data.native_effects ? root.t("Music and signals are rendered on the ESP.") : root.t("Music is rendered on this computer.");opacity:.65;wrapMode:Text.WordWrap;Layout.fillWidth:true }
                         Label { text:root.t("Music style");font.pixelSize:17 }
                         ComboBox { objectName:"musicStyleCombo";Layout.fillWidth:true;model:[root.t("Level meter"),root.t("Pulse")];property var keys:["meter","pulse"];currentIndex:Math.max(0,keys.indexOf(root.prefs.music_style || "meter"));onActivated:root.setting("music_style",keys[currentIndex]) }
                         Label { text:root.t("Character");font.pixelSize:17 }
                         ComboBox { objectName:"musicPresetCombo";Layout.fillWidth:true;model:[root.t("My tuning"),root.t("Soft"),root.t("Vivid")];property var keys:["custom","soft","vivid"];currentIndex:Math.max(0,keys.indexOf(root.prefs.music_preset || "custom"));onActivated:bridge.action("music-preset",[keys[currentIndex]]) }
+                        Frame { Layout.fillWidth:true;enabled:!root.demo
+                            ColumnLayout { anchors.fill:parent
+                                Label { text:root.t("Saved presets");font.weight:Font.DemiBold }
+                                RowLayout { Layout.fillWidth:true
+                                    TextField { id:presetName;objectName:"presetNameField";Layout.fillWidth:true;placeholderText:root.t("Preset name");maximumLength:32 }
+                                    Button { objectName:"savePresetButton";text:root.t("Save preset");enabled:!!presetName.text.trim() && (root.prefs.native_presets || []).length<5 && !bridge.busy;onClicked:bridge.action("preset-save",[presetName.text]) }
+                                    Label { text:(root.prefs.native_presets || []).length+" / 5";opacity:.6 }
+                                }
+                                RowLayout { Layout.fillWidth:true
+                                    ComboBox { id:savedPresets;objectName:"savedPresetsCombo";Layout.fillWidth:true;model:root.prefs.native_presets || [];textRole:"name" }
+                                    Button { text:root.t("Load preset");enabled:savedPresets.currentIndex>=0 && !bridge.busy;onClicked:bridge.action("preset-load",[savedPresets.model[savedPresets.currentIndex].id]) }
+                                    Button { text:root.t("Remove");enabled:savedPresets.currentIndex>=0 && !bridge.busy;onClicked:bridge.action("preset-delete",[savedPresets.model[savedPresets.currentIndex].id]) }
+                                }
+                            }
+                        }
                         Label { text:root.t("Palette"); font.pixelSize:17 }
                         ComboBox { Layout.fillWidth:true; model:[root.t("Classic"),root.t("Fire"),root.t("Ocean"),root.t("Violet"),root.t("Rainbow"),root.t("Wallpaper colors")]; property var keys:["classic","fire","ocean","violet","rainbow","wallpaper"]; currentIndex:Math.max(0,keys.indexOf(root.prefs.equalizer_palette || "classic")); onActivated:root.setting("equalizer_palette",keys[currentIndex]) }
+                        RowLayout { Layout.fillWidth:true
+                            Label { text:root.t("Repeat on steady sound, ms (0 disables)");Layout.fillWidth:true;wrapMode:Text.WordWrap }
+                            SpinBox { objectName:"musicRepeatSpin";from:0;to:5000;stepSize:200;editable:true;value:root.prefs.music_repeat_ms===undefined ? 1000 : root.prefs.music_repeat_ms;onValueModified:root.setting("music_repeat_ms",value) }
+                        }
                         Repeater {
                             model:[{key:"equalizer_sensitivity",name:root.t("Sensitivity"),min:50,max:200,step:5,def:100,unit:"%"},{key:"equalizer_decay_ms",name:root.t("Decay"),min:80,max:600,step:10,def:250,unit:" ms"},{key:"equalizer_attack_ms",name:root.t("Attack"),min:0,max:300,step:10,def:0,unit:" ms"},{key:"equalizer_gate",name:root.t("Noise gate"),min:0,max:30,step:1,def:6,unit:""}]
                             ColumnLayout { required property var modelData; Layout.fillWidth:true
@@ -266,7 +288,7 @@ ApplicationWindow {
                 ScrollView {
                     clip:true; contentWidth:availableWidth
                     ColumnLayout {
-                        width:parent.width; spacing:18; enabled:!root.demo
+                        width:parent.width; spacing:18; enabled:!root.demo && !root.otaBusy
                         Switch { text:root.t("Volume indicator"); checked:!!root.prefs.volume; onClicked:root.setting("volume",checked) }
                         Switch { text:root.t("Notification signals"); checked:!!root.prefs.notify; onClicked:root.setting("notify",checked) }
                         ComboBox { Layout.fillWidth:true; model:[root.t("Two flashes"),root.t("Gentle pulse"),root.t("Tint"),root.t("Marker pixel")]; property var keys:["flash","pulse","tint","pixel"]; currentIndex:Math.max(0,keys.indexOf(root.prefs.notify_style)); onActivated:root.setting("notify_style",keys[currentIndex]) }
@@ -322,6 +344,23 @@ ApplicationWindow {
                         RowLayout {
                             Button { text:root.t("Check Wi-Fi");enabled:!!root.receiver.mac && !bridge.busy;onClicked:root.setup("status") }
                             Button { text:root.receiver.connection==="wifi" ? root.t("Using Wi-Fi") : root.t("Use Wi-Fi");enabled:!!root.data.wifi_verified && root.receiver.connection!=="wifi" && !bridge.busy;onClicked:root.setup("wifi") }
+                        }
+                        Frame { Layout.fillWidth:true;visible:root.nativeSelected
+                            ColumnLayout { anchors.fill:parent
+                                Label { text:root.t("Wallpaper connection timeout");font.pixelSize:17;font.weight:Font.DemiBold }
+                                RowLayout { Layout.fillWidth:true
+                                    Label { text:root.t("Wait for connection, seconds");Layout.fillWidth:true }
+                                    SpinBox { from:2;to:60;value:Math.round((root.prefs.wallpaper_timeout_ms || 8000)/1000);enabled:!root.otaBusy;onValueModified:root.setting("wallpaper_timeout_ms",value*1000) }
+                                }
+                                RowLayout { Layout.fillWidth:true
+                                    Label { text:root.t("Fade duration, seconds");Layout.fillWidth:true }
+                                    SpinBox { from:0;to:10;value:Math.round((root.prefs.wallpaper_fade_ms===undefined ? 1000 : root.prefs.wallpaper_fade_ms)/1000);enabled:!root.otaBusy;onValueModified:root.setting("wallpaper_fade_ms",value*1000) }
+                                }
+                                Label { text:root.t("Confirmation interval: %1 seconds").replace("%1",String((root.prefs.wallpaper_timeout_ms || 8000)*7/8000));opacity:.65;wrapMode:Text.WordWrap;Layout.fillWidth:true }
+                                Button { objectName:"otaUpdateButton";text:root.t("Update firmware over Wi-Fi");enabled:!!(root.data.native_capabilities || {}).ota && (root.prefs.controller || {}).connection==="wifi" && !root.firmwareBusy && !bridge.busy;onClicked:bridge.action("ota-start",[]) }
+                                Label { text:root.t("The update keeps your settings and leaves lighting off. First OTA setup requires one USB update.");wrapMode:Text.WordWrap;Layout.fillWidth:true;opacity:.65 }
+                                Label { text:(root.ota.label || "")+(root.ota.percent===undefined ? "" : " · "+root.ota.percent+"%");visible:!!root.ota.label;wrapMode:Text.WordWrap;Layout.fillWidth:true }
+                            }
                         }
                         Label { text:root.t("Install on a new ESP");visible:root.setupPath===2; font.pixelSize:19; font.weight:Font.DemiBold; topPadding:20 }
                         RowLayout {
