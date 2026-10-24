@@ -202,7 +202,7 @@ not accessed. These results do not imply support for every ESP or LED type.
 - [x] Short RMS/clocked repeat/history and sparse same-target GUI preview tests.
 - [x] Final full release/Qt/native build, independent review and GitHub CI.
 - [x] OTA to identified ESP; real raw-level traffic, stale/replay/fail-dark tests.
-- [ ] Physical beat-latency comparison and user acceptance.
+- [x] Physical beat alignment accepted by the user on music.
 
 Alpha14 hardware acceptance: OTA0.2.0→0.2.1 completed and trial was confirmed;
 outputs GPIO2/4 (10+10 GRB), presets and the current800mA setting were retained.
@@ -213,4 +213,6 @@ audio grant; a new grant recovered, and explicit Off rejected old signed input.
 On quiet12s desktop-output observations,29–30 audio packets and zero RGB frames
 were sent, with no producer send failures. The source sample was at most10.7ms
 old when sent. Receiver clock estimates and paint counters are diagnostics,
-not acoustic-to-light measurements. Physical beat alignment awaits user acceptance.
+not acoustic-to-light measurements. The user accepted visible beat alignment on
+Queen’s “Another One Bites the Dust”, reporting no noticeable lag. Instrumented
+acoustic-to-light latency has not been measured.
