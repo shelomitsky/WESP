@@ -13,10 +13,104 @@ from PySide6.QtCore import QMetaObject, QObject, Q_ARG
 from PySide6.QtGui import QGuiApplication
 
 
+def find_item(window,name):
+    # Repeater delegates are in the visual tree, not QObject ownership tree.
+    pending=[window.contentItem()]
+    while pending:
+        item=pending.pop()
+        if item.objectName()==name:return item
+        pending.extend(item.childItems())
+    return None
+
+
 class DesktopWindowTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QGuiApplication.instance() or QGuiApplication([])
+
+    def test_paired_wifi_receiver_can_be_read_and_configured_without_usb(self):
+        import control,desktop,desktop_bridge
+        class Backend:
+            def __init__(self):self.calls=[]
+            def command(self,args):
+                return {'ok':True,'state':{'on':False,'bri':100}} if args[0]=='status' else {'ok':True,'firmware':{}}
+            def setup(self,action,fields):
+                self.calls.append((action,fields))
+                return dict(ok=True,receiver=dict(mac='680947485628',connection='wifi',count=10,
+                    outputs=[dict(gpio=2,count=10,order='GRB')],max_milliamps=500,
+                    capabilities={'wifi_configure':True},wifi={'connected':True,'ip':'192.0.2.2'}))
+        prefs={'controller':{'mac':'680947485628','count':10,'connection':'wifi','backend':'wesp'},'sections':[]}
+        with patch.object(control,'settings',return_value=prefs):
+            backend=Backend();model=desktop_bridge.DesktopModel(backend)
+            engine,bridge=desktop.create_window(model,demo_capture=False);self.addCleanup(bridge.close)
+            window=engine.rootObjects()[0];window.setProperty('page',4)
+            bridge.receive(dict(action='poll',ok=True,data=model.poll()));self.app.processEvents()
+            read=window.findChild(QObject,'readReceiverButton')
+            self.assertIsNotNone(read,'an existing Wi-Fi device needs a discoverable read action')
+            self.assertTrue(read.property('enabled'),'reading a paired Wi-Fi receiver must not require a USB port')
+            QMetaObject.invokeMethod(read,'click')
+            deadline=time.monotonic()+2
+            while time.monotonic()<deadline and not model.receiver:
+                self.app.processEvents();time.sleep(.01)
+            self.assertEqual(backend.calls[0][0],'status')
+            self.assertEqual(backend.calls[0][1]['mac'],'680947485628')
+            save=window.findChild(QObject,'saveOutputsButton')
+            deadline=time.monotonic()+2
+            while time.monotonic()<deadline and not save.property('enabled'):
+                self.app.processEvents();time.sleep(.01)
+            self.assertTrue(save.property('enabled'))
+            QMetaObject.invokeMethod(save,'click')
+            deadline=time.monotonic()+2
+            while time.monotonic()<deadline and len(backend.calls)<2:
+                self.app.processEvents();time.sleep(.01)
+            self.assertEqual(backend.calls[-1][0],'configure')
+            self.assertNotIn('ssid',backend.calls[-1][1])
+            self.assertNotIn('password',backend.calls[-1][1])
+            window.close()
+
+    def test_unsaved_output_text_survives_poll_and_invalid_gpio_explains_save(self):
+        import desktop
+        class Model:
+            demo=None
+            def poll(self):
+                return dict(target='device',configured=True,online=True,ports=[],firmware={},sections=[],settings={'controller':{'mac':'680947485628'}},
+                    state={'on':False},receiver=dict(mac='680947485628',connection='usb',
+                        outputs=[dict(gpio=2,count=10,order='GRB')],max_milliamps=500))
+            def close(self):pass
+        model=Model();engine,bridge=desktop.create_window(model);self.addCleanup(bridge.close)
+        bridge.timer.stop();window=engine.rootObjects()[0];window.setProperty('page',4)
+        bridge.receive(dict(action='poll',ok=True,data=model.poll()));self.app.processEvents()
+        count=find_item(window,'outputCount0');self.assertIsNotNone(count)
+        count.property('contentItem').setProperty('text','24')
+        bridge.receive(dict(action='poll',ok=True,data=model.poll()));self.app.processEvents()
+        self.assertEqual(find_item(window,'outputCount0').property('contentItem').property('text'),'24')
+        QMetaObject.invokeMethod(window,'editOutput',Q_ARG('QVariant',0),Q_ARG('QVariant','gpio'),Q_ARG('QVariant',-1))
+        self.app.processEvents()
+        self.assertFalse(window.findChild(QObject,'saveOutputsButton').property('enabled'))
+        self.assertTrue(window.findChild(QObject,'outputValidation').property('text'))
+        window.close()
+
+    def test_demo_direction_test_stops_on_off(self):
+        import control,desktop,desktop_bridge
+        with tempfile.TemporaryDirectory() as folder,patch.object(control,'CONFIG',Path(folder)), \
+             patch.object(control,'RUNTIME',Path(folder)/'runtime'), \
+             patch.object(desktop_bridge.DeviceBackend,'command',side_effect=AssertionError('device command')):
+            model=desktop_bridge.DesktopModel();model.set_demo(True,capture=False)
+            engine,bridge=desktop.create_window(model,demo_capture=False);self.addCleanup(bridge.close)
+            window=engine.rootObjects()[0];window.setProperty('page',2)
+            bridge.receive(dict(action='poll',ok=True,data=model.poll()));self.app.processEvents()
+            button=find_item(window,'directionTest0');self.assertIsNotNone(button)
+            QMetaObject.invokeMethod(button,'click')
+            deadline=time.monotonic()+2
+            while time.monotonic()<deadline and (not model.demo.test_status()['active'] or bridge.busy):
+                self.app.processEvents();time.sleep(.01)
+            self.assertTrue(model.demo.test_status()['active'])
+            QMetaObject.invokeMethod(window.findChild(QObject,'powerSwitch'),'click')
+            deadline=time.monotonic()+2
+            while time.monotonic()<deadline and model.demo.on:
+                self.app.processEvents();time.sleep(.01)
+            self.assertFalse(model.demo.test_status()['active'])
+            window.close()
 
     def test_real_window_edits_demo_without_a_device_command(self):
         import control

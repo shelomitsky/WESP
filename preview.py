@@ -88,6 +88,7 @@ class DemoSession:
         self.renderer=music.Renderer()
         self.analyzer=self.renderer.analyzer
         self.calm_color=None
+        self.calibration=None
         self.brightness, self.on, self.sequence = 128, True, 0
         self.lock = threading.RLock()
 
@@ -101,6 +102,8 @@ class DemoSession:
                 if type(value) is not bool:
                     raise ValueError('Invalid power state')
                 self.on = value
+                if not value:
+                    self.calibration=None
             elif key in self.prefs:
                 if key in ('music_custom','music_preset','equalizer','kde'):
                     raise ValueError('Unsupported demo setting')
@@ -125,6 +128,24 @@ class DemoSession:
             if name=='calm':
                 self.calm_color=control.kde_color()
 
+    def start_test(self,section,style):
+        import first_light
+        with self.lock:
+            if not self.on:
+                raise ValueError(control.tr('Turn on the lighting before testing a strip'))
+            self.calibration=first_light.Lease(dict(controller={'mac':'000000000000','count':20},
+                                                  sections=self.sections),section,style)
+
+    def stop_test(self):
+        with self.lock:
+            self.calibration=None
+
+    def test_status(self):
+        with self.lock:
+            if self.calibration and self.calibration.frame() is None:
+                self.calibration=None
+            return self.calibration.record() if self.calibration else dict(active=False)
+
     def process(self, samples):
         with self.lock:
             self.renderer.analyze(samples,self.prefs)
@@ -136,8 +157,15 @@ class DemoSession:
                     else layout.solid(self.calm_color or [0,112,254],self.sections,20))
             if not self.on:
                 pixels=[[0,0,0] for _ in range(20)]
+            calibration=self.test_status()
+            if calibration['active']:
+                test_pixels=self.calibration.frame()
+                if test_pixels is None:
+                    self.calibration=None;calibration={'active':False}
+                else:
+                    pixels=test_pixels
             self.sequence += 1
             return dict(target='demo', pixels=pixels, brightness=self.brightness,
-                        source='music' if self.prefs['equalizer'] else 'calm', sequence=self.sequence, updated=time.monotonic(),
+                        source='calibration' if calibration['active'] else 'music' if self.prefs['equalizer'] else 'calm', sequence=self.sequence, updated=time.monotonic(),
                         stale=False, sections=copy.deepcopy(self.sections), on=self.on,
                         settings=copy.deepcopy(self.prefs))

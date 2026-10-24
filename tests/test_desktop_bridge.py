@@ -9,6 +9,38 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 class DesktopModelTest(unittest.TestCase):
+    def test_native_firmware_finish_auto_reads_the_exact_board_and_allows_retry(self):
+        import desktop_bridge
+        class Backend:
+            def __init__(self):self.calls=[];self.fail=True
+            def command(self,args):
+                return dict(ok=True,firmware=dict(stage='installed',port='/dev/ttyUSB8',board={'mac':'aabbccddeeff'}))
+            def setup(self,action,fields):
+                self.calls.append((action,fields))
+                if self.fail:raise RuntimeError('read failed')
+                return dict(ok=True,receiver={'mac':'aabbccddeeff','outputs':[]})
+        backend=Backend();model=desktop_bridge.DesktopModel(backend)
+        model.command('firmware-native-ready',['job-token'])
+        self.assertEqual(backend.calls[0],('probe',{'port':'/dev/ttyUSB8','expected_mac':'aabbccddeeff'}))
+        self.assertTrue(model.setup_error,'firmware is installed, but the read needs its own retry')
+        backend.fail=False
+        model.command('setup',['retry',{}])
+        self.assertFalse(model.setup_error)
+        self.assertEqual(model.receiver['mac'],'aabbccddeeff')
+
+    def test_demo_strip_test_is_virtual_and_off_cancels_it(self):
+        import desktop_bridge
+        import numpy as np
+        with patch('desktop_bridge.DeviceBackend.command',side_effect=AssertionError('physical command')):
+            model=desktop_bridge.DesktopModel();model.set_demo(True,capture=False)
+            model.command('first-light',['first','rgb'])
+            record=model.demo.process(np.zeros(2048))
+            self.assertEqual(record['pixels'][:3],[[24,0,0]]*3)
+            model.command('power',['false'])
+            self.assertEqual(model.demo.process(np.zeros(2048))['pixels'],[[0,0,0]]*20)
+            self.assertFalse(model.poll()['calibration']['active'])
+            model.close()
+
     def test_widget_opens_the_same_desktop_entry_without_a_device_rpc(self):
         import control
         with tempfile.TemporaryDirectory() as folder, \

@@ -12,6 +12,11 @@ int main() {
   assert(authorizeIdentity(Transport::TCP,true,mac,"a0b7652d2050",token,token));
   assert(authorizeIdentity(Transport::TCP,true,mac,mac,token,"bad"));
   assert(!authorizeIdentity(Transport::TCP,true,mac,mac,token,token));
+  assert(!authorizeConfiguration(Transport::USB,false));
+  assert(!authorizeConfiguration(Transport::USB,true));
+  assert(!authorizeConfiguration(Transport::TCP,false));
+  assert(authorizeConfiguration(Transport::TCP,true));
+  assert(authorizeConfiguration(Transport::None,false));
   Core c;
   assert(c.count == 0 && !c.on);
   Output o{2, 2, "GRB"};

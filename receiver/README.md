@@ -1,4 +1,4 @@
-# WESP native receiver 0.1.1
+# WESP native receiver 0.1.2
 
 ESP32 classic, 4 MiB flash, Arduino ESP32 2.0.14, PlatformIO espressif32
 6.5.0. No WLED code or WLED effects. Build never opens a serial device.
@@ -40,7 +40,9 @@ after two seconds. A slow TCP reader is disconnected without blocking output.
 
 The first boot generates 32 random pairing bytes and stores them in NVS. `pair`
 returns their 64-character hex encoding over USB only. Neither hello nor error
-responses contain credentials. Configuration and pairing are USB-only.
+responses contain credentials. Pairing and changing Wi-Fi credentials are
+USB-only. An already paired PC can configure LED outputs/current over TCP,
+using the same MAC, token and session checks as RGB frames.
 
 All replies contain `ok`, `id`, `mac`, `proto:1`. All successful replies include
 `count`, `on`, `bri`. Errors add a fixed credential-free `error` code.
@@ -56,7 +58,8 @@ All replies contain `ok`, `id`, `mac`, `proto:1`. All successful replies include
 ```
 
 `hello` and successful `configure` additionally return `firmware:"WESP"`,
-`version:"0.1.1"`, `outputs`, `max_milliamps`, `watchdog_ms:1500`, and
+`version:"0.1.2"`, `capabilities:{wifi_configure:true}`, `outputs`,
+`max_milliamps`, `watchdog_ms:1500`, and
 `wifi:{configured,connected,ip,host}`. The stable host is
 `wesp-<last-six-MAC-hex>.local`, with mDNS service `_wesp._tcp` port 19447.
 Registration starts after Wi-Fi joins, without waiting for DNS clients.
@@ -72,7 +75,14 @@ The factory current budget is 500 mA. Optional
 8..63 bytes, or empty password for an open network. Omission preserves stored
 Wi-Fi credentials. All fields validate before any persistence. Applying a
 configuration first sends black to the old layout, turns the state off, clears
-the frame/owner, commits one NVS blob, then initializes the new dark layout.
+the frame/owner, initializes the new dark layout, then commits one NVS blob.
+If output initialization or persistence fails, it restores the previous layout
+and stays off. A TCP configure containing `wifi` is rejected before applying
+anything; leaving it out retains SSID, password and pairing bytes unchanged.
+The host confirms every successful save with a separate authenticated hello
+and exact read-back of outputs/current before committing local controller state.
+An explicit settings read can recover count after an ambiguous lost CFG reply;
+ordinary frames and status polls retain their strict saved-count guard.
 No frame causes an NVS write. Wi-Fi joining does not wait for connectivity.
 
 `state` accepts optional `on` boolean, `bri` integer 0..255, and `color` three

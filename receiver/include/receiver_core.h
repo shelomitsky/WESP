@@ -9,6 +9,12 @@ constexpr size_t MaxLine = 8192;
 constexpr uint32_t WatchdogMs = 1200;
 constexpr uint32_t PublishedWatchdogMs = 1500;
 enum class Transport { None, USB, TCP };
+// Called only after identity/session authentication. Network settings must not
+// disconnect the sole Wi-Fi management path before an acknowledgement.
+inline const char *authorizeConfiguration(Transport transport,bool changesWifi) {
+  if (transport==Transport::USB || (transport==Transport::TCP && !changesWifi)) return nullptr;
+  return "usb_only";
+}
 inline const char *authorizeIdentity(Transport transport,bool hello,const char *mac,const char *requestedMac,const char *token,const char *requestedToken) {
   if ((transport==Transport::TCP || !hello) && (!requestedMac || strcmp(mac,requestedMac))) return "wrong_mac";
   if (transport==Transport::TCP) {

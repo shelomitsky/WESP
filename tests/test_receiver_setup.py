@@ -13,6 +13,30 @@ import receiver_setup
 
 
 class SetupBridgeTest(unittest.TestCase):
+    def test_wifi_configuration_keeps_wifi_route_and_scene_after_verified_write(self):
+        import control,wesp_transport
+        with tempfile.TemporaryDirectory() as folder, \
+             patch.object(control,'CONFIG',Path(folder)/'config'), \
+             patch.object(control,'RUNTIME',Path(folder)/'runtime'), \
+             patch.object(control,'prepare_enrollment',side_effect=AssertionError('old-layout overlay replay before CFG')):
+            control.CONFIG.mkdir()
+            selected=dict(backend='wesp',connection='wifi',mac='680947485628',count=2,
+                          host='wesp-485628.local',fallback_host='192.0.2.2',port='/dev/ttyUSB8')
+            control.write_json(control.CONFIG/'settings.json',dict(controller=selected,equalizer=True))
+            device=wesp_transport.Device(**dict(port=selected['port'],connection='wifi',
+                expected_mac=selected['mac'],led_count=2,host=selected['host'],fallback_host=selected['fallback_host']))
+            callback=self.owner_callback(device,control)
+            def configure(outputs,ma,**fields):
+                device.led_count=3
+                return dict(mac=selected['mac'],count=3,connection='wifi',outputs=outputs,max_milliamps=ma)
+            with patch.object(device,'configure',side_effect=configure):
+                result=callback(dict(action='configure',mac=selected['mac'],
+                    outputs=[dict(gpio=4,count=3,order='RGB')],max_milliamps=700))
+            self.assertEqual(result['count'],3)
+            saved=control.settings()
+            self.assertEqual(saved['controller'],dict(selected,count=3))
+            self.assertTrue(saved['equalizer'])
+
     def owner_callback(self,device,control):
         # Exercise the real nested callback without starting the device service.
         source=Path(receiver_setup.__file__).with_name('usb_transport.py').read_text()
@@ -20,7 +44,7 @@ class SetupBridgeTest(unittest.TestCase):
         callback=next(n for n in serve.body if isinstance(n,ast.FunctionDef) and n.name=='receiver_setup')
         wrapper=ast.parse('def factory(device):\n    pass\n').body[0]
         wrapper.body=[callback,ast.Return(value=ast.Name(id='receiver_setup',ctx=ast.Load()))]
-        namespace=dict(control=control,device_lock=threading.RLock())
+        namespace=dict(control=control,device_lock=threading.RLock(),cancel_calibration=lambda:None)
         module=ast.fix_missing_locations(ast.Module(body=[wrapper],type_ignores=[]))
         exec(compile(module,'<owner-setup-test>','exec'),namespace)
         return namespace['factory'](device)

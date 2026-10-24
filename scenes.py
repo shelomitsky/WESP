@@ -52,12 +52,15 @@ def memory(prefs, saved):
 
 
 def activity(prefs, mem, state, now):
+    import first_light
     base=mode(prefs)
     labels={'music':tr('Music'),'calm':tr('Calm light'),'manual':tr('Manual lighting')}
     if mem.get('suspended'):
         effective,label='sleep',tr('Paused for sleep')
     elif not state.get('on'):
         effective,label='off',tr('Lighting is off')
+    elif first_light.active(prefs,mem):
+        effective,label='calibration',tr('Checking strip: %1',mem['firstLight'].get('name',''))
     elif mem.get('volumeUntil',0)>now:
         effective,label='volume',tr('Volume · then %1',labels[base])
     else:

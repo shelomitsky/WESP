@@ -17,6 +17,7 @@ import preview
 class DeviceBackend:
     COMMANDS = {'status', 'config', 'ports', 'power', 'brightness', 'setting', 'layout',
                 'enroll', 'clear', 'notify-preview', 'firmware-status','scene','music-preset',
+                'first-light','first-light-stop',
                 'firmware-prepare', 'firmware-prepare-native', 'firmware-install',
                 'firmware-cancel', 'firmware-connect', 'firmware-native-ready'}
 
@@ -36,6 +37,7 @@ class DeviceBackend:
     def setup(self, action, fields):
         if action not in ('probe', 'status', 'configure', 'wifi'):
             raise ValueError(tr('Unsupported application command'))
+        public_error=tr('Could not configure the receiver. Check the connection and output settings, then read the settings again.')
         try:
             endpoint = control.read_json(control.RUNTIME / 'receiver-setup.json', {})
             url = urllib.parse.urlsplit(endpoint['url'])
@@ -49,10 +51,16 @@ class DeviceBackend:
             with opener.open(request, timeout=8) as response:
                 result = json.load(response)
             if not isinstance(result, dict) or result.get('ok') is not True:
+                if isinstance(result,dict):
+                    public_error={
+                        'network_requires_usb':tr('Connect USB to change the Wi-Fi network. LED outputs can be saved over Wi-Fi.'),
+                        'firmware_update_required':tr('Update the ESP firmware over USB once to enable configuration over Wi-Fi.'),
+                        'configuration_unconfirmed':tr('The save could not be confirmed. Read the ESP settings again before retrying.')
+                    }.get(result.get('error_code'),public_error)
                 raise ValueError('Setup failed')
             return result
         except Exception:
-            raise RuntimeError(tr('Could not configure the receiver. Check the USB connection, GPIOs and network settings.')) from None
+            raise RuntimeError(public_error) from None
 
 
 class DemoAudio:
@@ -127,6 +135,24 @@ class DesktopModel:
         self.audio = None
         self.receiver = {}
         self.ports = []
+        self.setup_error=''
+        self.setup_note=''
+        self.wifi_verified=False
+        self.pending_probe=None
+
+    def read_pending_receiver(self):
+        if not self.pending_probe:
+            raise ValueError(tr('Select the USB receiver before reading settings'))
+        try:
+            result=self.backend.setup('probe',self.pending_probe)
+            self.receiver=result['receiver']
+            self.setup_error=''
+            self.setup_note=tr('Receiver settings read. Configure its LED outputs.')
+            return result
+        except Exception:
+            self.setup_error=tr('Firmware installed. Reading settings failed — retry the read.')
+            self.receiver={}
+            return {'ok':True}
 
     def identity(self):
         if self.demo is not None:
@@ -162,18 +188,45 @@ class DesktopModel:
                 self.demo.select_scene(args[0])
             elif action == 'music-preset' and len(args)==1:
                 self.demo.preset(args[0])
+            elif action=='first-light' and len(args)==2:
+                self.demo.start_test(args[0],args[1])
+            elif action=='first-light-stop':
+                self.demo.stop_test()
             else:
                 raise ValueError(tr('Leave demo mode to configure your device'))
             return {'ok': True}
         if action == 'setup':
+            if args[0]=='retry':
+                return self.read_pending_receiver()
+            if args[0]=='wifi' and not self.wifi_verified:
+                raise ValueError(tr('Check Wi-Fi before switching the connection'))
             result = self.backend.setup(args[0], args[1])
             self.receiver = result['receiver']
+            self.setup_error=''
+            if args[0] in ('probe','configure'):
+                self.wifi_verified=False
+            if args[0]=='probe':
+                self.setup_note=tr('Receiver settings read. Configure its LED outputs.')
+            elif args[0]=='configure':
+                self.setup_note=tr('Outputs saved on the ESP. Test the strips, then verify Wi-Fi.')
+            elif args[0]=='status':
+                self.wifi_verified=bool((self.receiver.get('wifi') or {}).get('connected'))
+                self.setup_note=tr('Wi-Fi verified for this receiver.') if self.wifi_verified else tr('Wi-Fi is not connected yet')
+            elif args[0]=='wifi':
+                self.setup_note=tr('Using Wi-Fi. You can move the ESP to a separate power supply.')
         else:
             result = self.backend.command([action, *args])
             if action == 'ports':
                 self.ports = result['ports']
             if action in ('enroll', 'firmware-connect'):
                 self.receiver = {}
+                self.setup_error='';self.setup_note='';self.wifi_verified=False
+            if action in ('firmware-prepare','firmware-prepare-native'):
+                self.pending_probe=None;self.setup_error='';self.setup_note=''
+            if action=='firmware-native-ready':
+                job=result['firmware']
+                self.pending_probe=dict(port=job['port'],expected_mac=job['board']['mac'])
+                self.read_pending_receiver()
         return result
 
     def poll(self):
@@ -182,28 +235,42 @@ class DesktopModel:
             import numpy as np
             record = self.audio.record if self.audio and self.audio.record else self.demo.process(np.zeros(2048))
             with self.demo.lock:
+                calibration=self.demo.test_status()
+                activity=scenes.activity(self.demo.prefs,{},dict(on=self.demo.on),time.time())
+                if calibration['active']:
+                    activity=dict(base=scenes.mode(self.demo.prefs),effective='calibration',label=tr('Checking strip: %1',calibration['name']))
                 return dict(target='demo', configured=False, online=False,
                     settings=copy.deepcopy(self.demo.prefs), sections=copy.deepcopy(self.demo.sections),
                     state=dict(on=self.demo.on, bri=self.demo.brightness), frame=record,
                     message=self.audio.message if self.audio else tr('Waiting for desktop audio'),
-                    activity=scenes.activity(self.demo.prefs,{},dict(on=self.demo.on),time.time()),
-                    receiver={}, ports=[], firmware={})
+                    activity=activity,calibration=calibration,
+                    receiver={}, ports=[], firmware={},setup_error='',setup_note='',wifi_verified=False)
         prefs = control.settings()
         selected = prefs.get('controller') or {}
         data = dict(target='device', configured=bool(selected), online=False, settings=prefs,
                     sections=prefs.get('sections', []), state={'on': False, 'bri': 128},
                     frame=preview.read(control.RUNTIME / 'frame-preview.json', selected.get('mac')),
-                    receiver=self.receiver, ports=self.ports, error='', message='', firmware={})
+                    receiver=self.receiver, ports=self.ports, error='', message='', firmware={},
+                    calibration={'active':False},setup_error=self.setup_error,setup_note=self.setup_note,
+                    wifi_verified=self.wifi_verified)
         if selected:
             try:
                 result = self.backend.command(['status'])
                 data.update(state=result['state'], online=True,
                             activity=result.get('activity',{}),
+                            calibration=result.get('calibration',{'active':False}),
                             message=(result.get('equalizer') or {}).get('message', ''))
             except Exception as error:
                 data['error'] = str(error)
         try:
             data['firmware'] = self.backend.command(['firmware-status'])['firmware']
+            labels={'starting':tr('Preparing installation'),'tools':tr('Preparing installation tools'),
+                    'download':tr('Downloading firmware'),'detecting':tr('Identifying the selected ESP'),
+                    'backup':tr('Saving the original firmware'),'prepared':tr('Backup ready. Confirm firmware replacement.'),
+                    'writing':tr('Writing and verifying firmware'),'flashed':tr('Firmware written. Finish setup.'),
+                    'installed':tr('Firmware installed'),'connected':tr('Controller connected'),
+                    'failed':tr('Installation failed; the backup is retained'),'cancelled':tr('Installation cancelled')}
+            data['firmware']['label']=labels.get(data['firmware'].get('stage'),'')
         except Exception:
             pass
         return data

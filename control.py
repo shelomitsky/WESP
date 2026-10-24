@@ -12,6 +12,7 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
+import first_light
 
 CONFIG = Path(os.environ.get('WLED_CONFIG_DIR', str(Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home()/'.config'))) / 'wled-control-desktop')))
 RUNTIME = Path(os.environ.get('WLED_RUNTIME_DIR',
@@ -84,7 +85,7 @@ def settings():
     return DEFAULTS | read_json(CONFIG / 'settings.json', {})
 
 
-def persist_enrollment(selected):
+def persist_enrollment(selected,preserve_scene=False):
     """Prepare both documents before the USB owner commits its new Device."""
     import layout
     prefs=settings()
@@ -99,7 +100,9 @@ def persist_enrollment(selected):
     if sections is None:
         sections=[dict(id='main',name=tr("Lighting"),start=0,count=selected['count'],
                        reverse=False,placement='custom')]
-    prefs.update(controller=selected,sections=sections,equalizer=False,transport='usb')
+    prefs.update(controller=selected,sections=sections,transport='usb')
+    if not preserve_scene:
+        prefs['equalizer']=False
     documents={RUNTIME/'state.json':dict(ids=[],volumeUntil=0,base={},suspended=False,
                                         resume=None,controller_mac=selected['mac']),
                CONFIG/'settings.json':prefs}
@@ -209,6 +212,8 @@ def base_segments(state):
 
 
 def apply(prefs, mem, state=None, marker_visible=True):
+    if first_light.active(prefs,mem):
+        return
     state = state or device_state(prefs)
     if (mem['suspended'] or not state['on'] or mem['volumeUntil'] > time.time()
             or (prefs.get('equalizer') and mem.get('equalizerBase'))):
@@ -266,7 +271,7 @@ def apply(prefs, mem, state=None, marker_visible=True):
 
 
 def volume(prefs, mem, percent):
-    if mem['suspended'] or not prefs['volume']:
+    if mem['suspended'] or not prefs['volume'] or first_light.active(prefs,mem):
         return
     state = device_state(prefs)
     if not state['on']:
@@ -309,6 +314,8 @@ def volume(prefs, mem, percent):
 
 def release_equalizer(prefs, mem):
     """Restore the pre-music state; keep snapshot if restoration must retry."""
+    if first_light.active(prefs,mem):
+        return
     snapshot = mem.get('equalizerBase')
     if not snapshot or mem['suspended'] or mem['volumeUntil'] > time.time():
         return
@@ -329,7 +336,7 @@ def release_equalizer(prefs, mem):
 
 
 def equalizer_frame(prefs, mem, rgb, pixels=None):
-    if not prefs.get('equalizer') or mem['suspended'] or mem['volumeUntil'] > time.time():
+    if not prefs.get('equalizer') or mem['suspended'] or mem['volumeUntil'] > time.time() or first_light.active(prefs,mem):
         return False
     state = device_state(prefs)
     if not state['on']:
@@ -374,9 +381,36 @@ def normalize_host(value):
     return value.rstrip('/')
 
 
+def end_first_light(prefs,mem,cancel=True,resume=True):
+    record=mem.pop('firstLight',None)
+    if not record or record.get('mac')!=(prefs.get('controller') or {}).get('mac'):
+        return
+    import usb_transport
+    if cancel:
+        usb_transport.client(calibration={'action':'stop'})
+    if not resume or mem.get('suspended'):
+        return
+    state=device_state(prefs)
+    if not state['on'] or prefs.get('equalizer'):
+        return
+    import notification_fx
+    if prefs.get('kde') or notification_fx.active(prefs,mem,time.time()):
+        apply(prefs,mem,state)
+    else:
+        # Identification sends only RGB frames; restore the CURRENT underlying
+        # color/effect without replaying an old snapshot or changing power.
+        segments=[dict(id=int(i),frz=False,**value) for i,value in base_segments(state).items()]
+        request(prefs,{'seg':segments,'tt':0})
+
+
 def prepare_enrollment():
     """Called by the USB owner with the shared command lock held."""
     prefs,mem=settings(),runtime()
+    if mem.get('firstLight'):
+        try:
+            end_first_light(prefs,mem,resume=False)
+        finally:
+            write_json(RUNTIME/'state.json',mem)
     if mem.get('equalizerBase'):
         release_equalizer(prefs,mem)
         if mem.get('equalizerBase'):
@@ -389,6 +423,31 @@ def execute(args):
     cmd = args[0]
     prefs = settings()
     mem = runtime()
+    if cmd=='first-light':
+        if len(args)!=3 or not prefs.get('controller'):
+            raise ValueError(tr('Choose a saved strip to test'))
+        if mem.get('suspended'):
+            raise ValueError(tr('Strip tests are paused during sleep'))
+        state=device_state(prefs)
+        if not state['on']:
+            raise ValueError(tr('Turn on the lighting before testing a strip'))
+        # Validate before asking the physical owner to acquire a finite lease.
+        first_light.Lease(prefs,args[1],args[2])
+        import usb_transport
+        mem['firstLight']=usb_transport.client(calibration={'action':'start','section':args[1],'style':args[2]})
+        mem['volumeUntil']=0
+        try:
+            write_json(RUNTIME/'state.json',mem)
+        except Exception:
+            end_first_light(prefs,mem)
+            raise
+        return dict(ok=True,calibration=mem['firstLight'])
+    if cmd=='first-light-stop':
+        try:
+            end_first_light(prefs,mem)
+        finally:
+            write_json(RUNTIME/'state.json',mem)
+        return dict(ok=True)
     if cmd in ('scene','music-preset'):
         import scenes
         if len(args)!=2:
@@ -414,6 +473,13 @@ def execute(args):
     if cmd == 'config':
         return dict(ok=True, settings=prefs)
     if cmd == 'ambient-tick':
+        if mem.get('firstLight'):
+            if not first_light.active(prefs,mem):
+                try:
+                    end_first_light(prefs,mem)
+                finally:
+                    write_json(RUNTIME/'state.json',mem)
+            return dict(ok=True)
         import notification_fx
         if (not prefs.get('controller') or mem['suspended'] or mem['volumeUntil']>time.time()
                 or (prefs.get('equalizer') and mem.get('equalizerBase'))):
@@ -456,8 +522,17 @@ def execute(args):
             worker = dict(message=tr("Equalizer worker is not running"))
         import scenes
         state=device_state(prefs)
+        calibration=dict(active=False)
+        if mem.get('firstLight'):
+            import usb_transport
+            calibration=usb_transport.client(calibration={'action':'status'})
+            if not calibration.get('active'):
+                try:
+                    end_first_light(prefs,mem,cancel=False,resume=not first_light.active(prefs,mem))
+                finally:
+                    write_json(RUNTIME/'state.json',mem)
         return dict(ok=True,state=state,settings=prefs,activity=scenes.activity(prefs,mem,state,time.time()),
-                    notifications=len(mem['ids']), equalizer=worker,wallpaper=wallpaper_palette)
+                    notifications=len(mem['ids']), equalizer=worker,wallpaper=wallpaper_palette,calibration=calibration)
     if not prefs.get('controller') and cmd in ('volume','volume-end','notify-add','notify-close','clear','apply','sleep','wake','shutdown'):
         return dict(ok=True)
     if cmd == 'session-start':
@@ -467,6 +542,7 @@ def execute(args):
         write_json(RUNTIME / 'state.json', mem)
         return dict(ok=True)
     if cmd in ('sleep', 'shutdown'):
+        mem.pop('firstLight',None)
         if not mem['suspended']:
             state = device_state(prefs)
             mem['resume'] = {'on': state['on'], 'bri': state['bri']}
@@ -546,6 +622,11 @@ def execute(args):
             if mem['suspended'] or not state['on']:
                 return dict(ok=True, state=state)
             payload = {'bri': value}
+        if mem.get('firstLight'):
+            if payload.get('on') is False:
+                mem.pop('firstLight',None)
+            else:
+                end_first_light(prefs,mem)
         request(prefs, payload)
         state = device_state(prefs)
         if cmd == 'power':

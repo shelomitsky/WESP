@@ -11,8 +11,9 @@ Author: **Chapman**. Licensed under MIT. Please credit Chapman when sharing
 screenshots, builds or articles about this project; retain the copyright and
 license notices when distributing its code.
 
-**0.2.0-alpha.9: local release candidate.** Includes a standalone Qt application,
-transport-free music demo, coherent Pulse style and music presets. Generalized device/layout support and
+**0.2.0-alpha.10: local release candidate.** Includes a standalone Qt application,
+transport-free music demo, coherent Pulse style, music presets, bounded strip checks
+and output configuration over Wi-Fi for native firmware 0.1.2. Generalized device/layout support and
 the new installer have automated checks. A fresh KDE session and physical LEDs
 still need acceptance before a public release. This candidate does not replace
 an existing installation automatically and has not been published.
@@ -112,16 +113,30 @@ The pinned PlatformIO build never opens a serial port. A desktop bundle can be
 built by `build_release.build(output, receiver=assets_directory)`; compiled images
 are checksum-verified optional release assets, never committed source binaries.
 
-In **Device and strips**, choose **Install WESP firmware (USB + Wi-Fi)**,
-wait for a complete backup and confirm replacement on the identified test board.
-After installation choose **Read WESP receiver**, add physical outputs and set
-GPIO, LED count, RGB color order and LED current limit. There are no default pins.
-Enter the Wi-Fi network/password in the widget and save. Passwords are sent over
-a private authenticated loopback bridge and USB, never shell arguments or logs.
-Then **Check Wi-Fi** and **Use Wi-Fi** verify the same MAC and pairing key over
-TCP. Only after that disconnect USB and power the board from a suitable separate
-supply. Pairing credentials stay in a separate private desktop file. Stable
+In the standalone application's **Connection** page choose **Set up a new ESP**,
+then **Prepare WESP firmware**. Wait for a complete backup and confirm replacement
+on the identified test board. **Finish installation** reads settings from that
+exact board; a failed read has a separate retry. Choose GPIO, LED count, RGB order
+and current budget, enter the network/password, then save. GPIOs are never guessed.
+Network credentials travel over the private local bridge and USB, never shell
+arguments or logs. Save turns the outputs off; it does not start a light test.
+
+On **Strips**, turn lighting on when ready and check each saved section's direction
+or RGB colors. Checks are dim and finite (at most five seconds); other sections
+are black. Stop and Off cancel the test, and Off never gets undone by restoration.
+The same controls work virtually in demo mode without contacting any board.
+
+**Check Wi-Fi**, then **Use Wi-Fi** verify the same MAC and pairing key over TCP.
+After verification, move the ESP to a suitable separate supply and check connection
+again. Pairing credentials stay in a separate private desktop file. Stable
 `wesp-<MAC suffix>.local` discovery has the paired IP as fallback.
+
+For a paired native receiver with firmware **0.1.2**, **Read ESP settings** works
+over Wi-Fi without a selected USB port. Change GPIOs, counts, color order or current
+budget, then **Save LED outputs over Wi-Fi**. A separate read confirms exactly
+what the ESP saved before the desktop commits its state. Changing the Wi-Fi network
+and first pairing still require USB. Existing 0.1.1 boards need a one-time firmware
+update over USB; the app explains this instead of enabling an unsupported save.
 
 The receiver has one firmware for USB and Wi-Fi: RGB frames and static colors are
 computed on the PC. Firmware 0.1.1 adds one dim amber runner on configured outputs

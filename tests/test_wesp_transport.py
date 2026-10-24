@@ -185,8 +185,60 @@ class TransportTests(unittest.TestCase):
             connect.assert_not_called()
         with self.assertRaisesRegex(ValueError, 'USB'):
             device.pair()
-        with self.assertRaisesRegex(ValueError, 'USB'):
+        with self.assertRaisesRegex(ValueError, 'Pair'):
             device.configure([dict(gpio=2, count=2, order='GRB')], 500)
+
+    def configured_peer(self, mismatch=False, supported=True):
+        stored=dict(outputs=[dict(gpio=2,count=2,order='GRB')],max_milliamps=500)
+        def respond(request,reply):
+            if request['op']=='configure':
+                stored.update(outputs=request['outputs'],max_milliamps=request['max_milliamps'])
+            reply.update(count=sum(o['count'] for o in stored['outputs']))
+            if request['op'] in ('hello','configure'):
+                reply.update(stored)
+                reply['capabilities']={'wifi_configure':supported,'token':TOKEN}
+                if mismatch and request['op']=='hello' and any(r['op']=='configure' for r in peer.requests):
+                    reply['max_milliamps']=500
+        device,peer=self.device(respond)
+        return device,peer
+
+    def test_wifi_configure_reads_back_same_board_and_new_count_without_pairing(self):
+        device,peer=self.configured_peer()
+        result=device.configure([dict(gpio=4,count=3,order='RGB')],700)
+        self.assertEqual(result['outputs'],[dict(gpio=4,count=3,order='RGB')])
+        self.assertEqual(result['max_milliamps'],700)
+        self.assertEqual(result['count'],3)
+        self.assertEqual(result['connection'],'wifi')
+        self.assertEqual([r['op'] for r in peer.requests],['hello','hello','configure','hello'])
+        self.assertTrue(all(r['mac']==MAC and r['token']==TOKEN for r in peer.requests))
+        self.assertNotIn(TOKEN,json.dumps(result))
+        self.assertEqual(device.setup_status()['capabilities'],{'wifi_configure':True})
+
+    def test_wifi_configure_old_firmware_and_network_change_fail_before_write(self):
+        device,peer=self.configured_peer(supported=False)
+        with self.assertRaisesRegex(ValueError,'firmware'):
+            device.configure([dict(gpio=4,count=3,order='RGB')],700)
+        self.assertFalse(any(r['op']=='configure' for r in peer.requests))
+        device,peer=self.configured_peer()
+        with self.assertRaisesRegex(ValueError,'USB'):
+            device.configure([dict(gpio=4,count=3,order='RGB')],700,ssid='network',password='password')
+        self.assertEqual(peer.requests,[])
+
+    def test_configure_ack_without_matching_readback_is_not_success(self):
+        device,peer=self.configured_peer(mismatch=True)
+        with self.assertRaisesRegex(ValueError,'confirm'):
+            device.configure([dict(gpio=4,count=3,order='RGB')],700)
+        self.assertEqual(device.led_count,3)
+        self.assertIsNone(device.last_frame)
+
+    def test_explicit_settings_read_recovers_count_without_weakening_frame_guard(self):
+        device,peer=self.device(lambda req,reply:reply.update(count=3))
+        result=device.setup_status(refresh_count=True)
+        self.assertEqual(result['count'],3)
+        self.assertEqual(device.led_count,3)
+        with self.assertRaises(ValueError):device.pixels([[1,2,3]]*2)
+        peer.change=lambda req,reply:reply.update(count=4)
+        with self.assertRaisesRegex(ValueError,'count changed'):device.query()
 
     def test_setup_status_sanitizes_wifi(self):
         device, _ = self.device(lambda req, reply: reply.update(wifi=dict(configured=True, connected=True, ip='192.0.2.2', host='wesp-485628.local', password='secret', token=TOKEN)))
@@ -199,6 +251,12 @@ class TransportTests(unittest.TestCase):
     def test_setup_status_reports_host_transport_instead_of_peer_claim(self):
         device, _ = self.device(lambda req, reply: reply.update(connection='usb'))
         self.assertEqual(device.setup_status().get('connection'),'wifi')
+
+    def test_fresh_settings_read_does_not_keep_a_removed_firmware_capability(self):
+        device,peer=self.configured_peer()
+        self.assertTrue(device.setup_status()['capabilities']['wifi_configure'])
+        peer.change=lambda request,reply:None
+        self.assertFalse(device.setup_status().get('capabilities',{}).get('wifi_configure',False))
 
     def test_sequence_session_and_private_state(self):
         device, server = self.device()
@@ -244,13 +302,18 @@ class TransportTests(unittest.TestCase):
                 self.reply = b''
                 self.requests = []
                 self.count = 0
+                self.outputs=[]
+                self.max_milliamps=500
             def write(self, packet):
                 request = json.loads(packet)
                 self.requests.append(request)
                 if request['op'] == 'configure':
                     self.count = sum(o['count'] for o in request['outputs'])
+                    self.outputs=request['outputs'];self.max_milliamps=request['max_milliamps']
                 reply = dict(ok=True, id=request['id'], proto=1, mac=MAC,
                              firmware='WESP', count=self.count, on=False, bri=255)
+                if request['op'] in ('hello','configure'):
+                    reply.update(outputs=self.outputs,max_milliamps=self.max_milliamps)
                 if request['op'] == 'pair':
                     reply['token'] = TOKEN
                 self.reply = json.dumps(reply).encode() + b'\n'

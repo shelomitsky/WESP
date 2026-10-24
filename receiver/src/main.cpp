@@ -138,7 +138,9 @@ void addStatus(cJSON *reply,bool detailed) {
   cJSON_AddNumberToObject(reply,"bri",core.brightness);
   if (!detailed) return;
   cJSON_AddStringToObject(reply,"firmware","WESP");
-  cJSON_AddStringToObject(reply,"version","0.1.1");
+  cJSON_AddStringToObject(reply,"version","0.1.2");
+  cJSON *capabilities=cJSON_AddObjectToObject(reply,"capabilities");
+  cJSON_AddBoolToObject(capabilities,"wifi_configure",true);
   cJSON_AddNumberToObject(reply,"max_milliamps",core.maxMilliamps);
   cJSON_AddNumberToObject(reply,"watchdog_ms",PublishedWatchdogMs);
   cJSON *outputs=cJSON_AddArrayToObject(reply,"outputs");
@@ -239,12 +241,19 @@ const char *configure(const cJSON *request) {
     memset(next.ssid,0,sizeof(next.ssid)); memset(next.password,0,sizeof(next.password));
     memcpy(next.ssid,ssid,strlen(ssid)); memcpy(next.password,password,strlen(password));
   }
-  // Validate everything before darkening, then commit a single NVS blob.
+  // Validate before darkening. Initialize outputs before committing the NVS
+  // blob, so a rejected hardware configuration is not installed on next boot.
   core.off(); paint();
-  if (!persist(next)) return "storage_error";
+  core.configure(next.outputs,next.outputCount,next.maxMilliamps);
+  bool installed=installOutputs();
+  if (!installed || !persist(next)) {
+    core.off(); paint();
+    if (config.outputCount) core.configure(config.outputs,config.outputCount,config.maxMilliamps);
+    else { core.outputCount=0; core.count=0; core.maxMilliamps=config.maxMilliamps; }
+    installOutputs(); // Restore the previous configuration, remaining dark.
+    return installed?"storage_error":"output_error";
+  }
   config=next;
-  core.configure(config.outputs,config.outputCount,config.maxMilliamps);
-  if (!installOutputs()) return "output_error";
   if (wifi) joinWifi();
   return nullptr;
 }
@@ -274,8 +283,8 @@ void process(const char *line,Transport transport) {
       if (transport!=Transport::USB) error="usb_only";
       else if (!nvsReady) error="storage_error";
     } else if (!strcmp(op,"configure")) {
-      if (transport!=Transport::USB) error="usb_only";
-      else error=configure(request);
+      error=authorizeConfiguration(transport,field(request,"wifi")!=nullptr);
+      if (!error) error=configure(request);
     } else if (!strcmp(op,"state")) {
       const cJSON *on=field(request,"on"), *bri=field(request,"bri"), *rgb=field(request,"color");
       int brightness=core.brightness, components[3]={color[0],color[1],color[2]};

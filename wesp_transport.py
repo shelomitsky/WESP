@@ -19,6 +19,12 @@ MAC_RE = re.compile(r'[0-9a-f]{12}')
 _CREDENTIAL_LOCK = threading.RLock()
 
 
+class ConfigurationError(ValueError):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code=code
+
+
 def credentials_path():
     import control
     return Path(control.CONFIG) / 'credentials.json'
@@ -204,7 +210,7 @@ class Device:
         if self.sequence > 2147483647:
             raise ValueError('WESP request sequence exhausted; reconnect')
         request = dict(fields or {}, op=op, id=self.sequence, session=self.session)
-        if op != 'hello' or self.connection == 'wifi':
+        if op != 'hello' or self.expected_mac:
             request['mac'] = self.expected_mac
         if self.connection == 'wifi':
             request['token'] = self._token
@@ -238,10 +244,13 @@ class Device:
                     raise ValueError('WESP rejected the request')
                 if type(reply.get('on')) is not bool or type(reply.get('bri')) is not int or not 0 <= reply['bri'] <= 255:
                     raise ValueError('Invalid WESP state response')
-                allowed=('mac','proto','count','firmware','version','outputs','max_milliamps','wifi','on','bri','color','watchdog_ms')
-                previous=self.document or {}
+                allowed=('mac','proto','count','firmware','version','outputs','max_milliamps','wifi','capabilities','on','bri','color','watchdog_ms')
+                previous={} if op=='hello' else self.document or {}
                 self.document={key:copy.deepcopy(previous[key]) for key in allowed if key in previous}
                 self.document.update({key:copy.deepcopy(reply[key]) for key in allowed if key in reply})
+                if 'capabilities' in reply:
+                    caps=reply['capabilities']
+                    self.document['capabilities']={'wifi_configure':isinstance(caps,dict) and caps.get('wifi_configure') is True}
                 # Never retain arbitrary firmware fields (especially pair token).
                 wifi = reply.get('wifi')
                 if 'wifi' in reply and isinstance(wifi, dict):
@@ -370,9 +379,9 @@ class Device:
             return True
 
     def configure(self, outputs, max_milliamps=500, ssid=None, password=None):
-        if self.connection != 'usb':
-            raise ValueError('WESP configuration requires physical USB')
         fields = dict(outputs=validate_outputs(outputs, max_milliamps), max_milliamps=max_milliamps)
+        if self.connection != 'usb' and (ssid is not None or password is not None):
+            raise ConfigurationError('network_requires_usb','Use USB to change the WESP Wi-Fi network')
         if ssid is not None:
             if not isinstance(ssid, str) or not 1 <= len(ssid.encode()) <= 32 or not isinstance(password, str) or (password and not 8 <= len(password.encode()) <= 63):
                 raise ValueError('Invalid WESP Wi-Fi credentials')
@@ -380,19 +389,25 @@ class Device:
         elif password is not None:
             raise ValueError('WESP Wi-Fi SSID is required')
         with self.query_lock:
-            self.connect()
+            if self.connection=='wifi':
+                if not self.setup_status(refresh_count=True).get('capabilities',{}).get('wifi_configure'):
+                    raise ConfigurationError('firmware_update_required','Update WESP receiver firmware over USB to configure outputs over Wi-Fi')
+            else:
+                self.connect()
             old_count = self.led_count
+            self.last_frame = None
             self.led_count = sum(output['count'] for output in fields['outputs'])
             try:
-                reply = self._run('configure', fields)
+                self._run('configure', fields)
             except Exception:
                 self.led_count = old_count
                 raise
-            self.last_frame = None
+            # A write ACK is insufficient: read the exact same authenticated
+            # receiver again before reporting success to the UI or persisting.
+            result=self.setup_status()
+            if result.get('outputs')!=fields['outputs'] or result.get('max_milliamps')!=max_milliamps:
+                raise ConfigurationError('configuration_unconfirmed','Could not confirm the saved WESP configuration; read settings again')
             # Only explicitly selected, non-secret fields leave this boundary.
-            result = {key: copy.deepcopy(self.document[key]) for key in
-                      ('mac', 'count', 'outputs', 'max_milliamps', 'wifi') if key in self.document}
-            result['connection'] = self.connection
             return result
 
     def pair(self):
@@ -402,13 +417,27 @@ class Device:
         save_token(self.expected_mac, reply.get('token'))
         return dict(paired=True, mac=self.expected_mac)
 
-    def setup_status(self):
+    def setup_status(self,refresh_count=False):
         with self.query_lock:
             # State/frame ACKs intentionally contain only the common fields.
             # Request full current metadata, including asynchronous Wi-Fi join.
-            self._run('hello')
+            previous_count,previous_discover=self.led_count,self.discover
+            if refresh_count:
+                # Explicit management reads can recover an uncertain CFG ACK.
+                # MAC/token checks remain mandatory; ordinary frames/polls
+                # never use this exception to the saved-count guard.
+                self.led_count=None;self.discover=True
+            try:
+                self._run('hello')
+                if self.led_count!=previous_count:
+                    self.last_frame=None
+            except Exception:
+                self.led_count=previous_count
+                raise
+            finally:
+                self.discover=previous_discover
             result = {key: copy.deepcopy(self.document[key]) for key in
-                      ('mac', 'count', 'outputs', 'max_milliamps', 'wifi', 'firmware', 'version', 'watchdog_ms')
+                      ('mac', 'count', 'outputs', 'max_milliamps', 'wifi', 'capabilities', 'firmware', 'version', 'watchdog_ms')
                       if key in self.document}
             result['connection'] = self.connection
             return result

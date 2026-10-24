@@ -25,7 +25,18 @@ ApplicationWindow {
     property bool replaceConfirmed: false
     property string confirmationToken: ""
     property string editingTarget: ""
+    property string sectionsSignature: ""
+    property string outputsSignature: ""
+    property int setupPath: 0
+    readonly property var gpioPins: [-1,2,4,5,13,14,15,16,17,18,19,21,22,23,25,26,27,32,33]
     readonly property var receiver: data.receiver || ({})
+    readonly property bool nativeSelected: (prefs.controller || {}).backend==="wesp"
+    readonly property bool usbSetup: setupPath!==0 || !nativeSelected || (prefs.controller || {}).connection!=="wifi"
+    readonly property bool receiverWifi: receiver.connection==="wifi"
+    readonly property bool canConfigure: !!receiver.mac && (!receiverWifi || !!(receiver.capabilities || {}).wifi_configure)
+    readonly property var calibration: data.calibration || ({active:false})
+    readonly property bool canTest: (demo || !!data.online) && !!state.on && !layoutDirty && !bridge.busy && !calibration.active
+    readonly property string outputError: validateOutputs()
     readonly property var job: data.firmware || ({})
     readonly property bool firmwareBusy: ["starting","tools","download","detecting","backup","writing","connecting"].indexOf(job.stage) >= 0
     function t(message) { return bridge.text(message); }
@@ -38,29 +49,51 @@ ApplicationWindow {
         var copy=JSON.parse(JSON.stringify(outputs)); copy[index][key]=value;
         outputs=copy; outputsDirty=true;
     }
+    function validateOutputs() {
+        if(!receiver.mac) return root.t("Read the ESP settings first.");
+        if(!canConfigure) return root.t("Update the ESP firmware over USB once to enable configuration over Wi-Fi.");
+        if(outputs.length<1) return root.t("Add at least one LED output.");
+        var used={},total=0;
+        for(var i=0;i<outputs.length;i++) {
+            var out=outputs[i];
+            if(gpioPins.indexOf(out.gpio)<=0) return root.t("Choose a GPIO for every output.");
+            if(used[out.gpio]) return root.t("Each output needs a different GPIO.");
+            if(out.count<1 || out.count>1024) return root.t("Set a length from 1 to 1024 LEDs.");
+            used[out.gpio]=true;total+=out.count;
+        }
+        if(total>1024) return root.t("The total length cannot exceed 1024 LEDs.");
+        return "";
+    }
     function setup(action) {
-        var fields={port:selectedPort,mac:receiver.mac || ""};
+        var fields={port:selectedPort,mac:receiver.mac || (prefs.controller || {}).mac || ""};
         if(action==="configure") {
             fields.outputs=outputs; fields.max_milliamps=currentBudget;
-            if(wifiDirty) { fields.ssid=ssid.text; fields.password=password.text; }
+            if(wifiDirty && !receiverWifi) { fields.ssid=ssid.text; fields.password=password.text; }
         }
         bridge.action("setup",[action,fields]);
     }
-    onDataChanged: {
+    function syncData() {
         var incoming=data.settings || {};
+        var nextReceiver=data.receiver || {};
+        var nextSections=data.sections || [];
         var target=data.target+":"+((incoming.controller || {}).mac || "");
         if(editingTarget!==target) {
             brightnessDelay.stop();
             editingTarget=target; layoutDirty=false; outputsDirty=false;
+            sectionsSignature="";outputsSignature="";
             wifiDirty=false; ssid.text=""; password.text="";
         }
         if(confirmationToken!==(data.firmware || {}).token) {
             confirmationToken=(data.firmware || {}).token || ""; replaceConfirmed=false;
         }
-        if(!layoutDirty) draftSections=JSON.parse(JSON.stringify(sections));
-        if(!outputsDirty) { outputs=JSON.parse(JSON.stringify(receiver.outputs || []));currentBudget=receiver.max_milliamps || 500; }
-        if(!selectedPort && prefs.controller) selectedPort=prefs.controller.port || "";
+        var sectionKey=JSON.stringify(nextSections);
+        if(!layoutDirty && sectionsSignature!==sectionKey) { draftSections=JSON.parse(sectionKey);sectionsSignature=sectionKey; }
+        var outputKey=JSON.stringify([nextReceiver.mac,nextReceiver.outputs,nextReceiver.max_milliamps]);
+        if(!outputsDirty && outputsSignature!==outputKey) { outputs=JSON.parse(JSON.stringify(nextReceiver.outputs || []));currentBudget=nextReceiver.max_milliamps || 500;outputsSignature=outputKey; }
+        if(!selectedPort && incoming.controller) selectedPort=incoming.controller.port || "";
     }
+    onDataChanged: Qt.callLater(syncData)
+    Component.onCompleted: syncData()
     Connections {
         target: bridge
         function onCompleted(action,ok) {
@@ -93,7 +126,7 @@ ApplicationWindow {
                 }
                 Item { Layout.fillHeight:true }
                 Button { text:root.demo ? root.t("Back to my device") : root.t("Try without an ESP"); Layout.fillWidth:true; enabled:!bridge.busy; onClicked:bridge.setDemo(!root.demo) }
-                Label { text:root.demo ? root.t("Demo — your device is unchanged") : "0.2.0-alpha.9"; wrapMode:Text.WordWrap; Layout.fillWidth:true; opacity:.6 }
+                Label { text:root.demo ? root.t("Demo — your device is unchanged") : "0.2.0-alpha.10"; wrapMode:Text.WordWrap; Layout.fillWidth:true; opacity:.6 }
             }
         }
         ColumnLayout {
@@ -196,6 +229,9 @@ ApplicationWindow {
                     ColumnLayout {
                         width:parent.width; spacing:12
                         Label { text:root.t("Arrange your physical LED ranges and their directions."); wrapMode:Text.WordWrap; Layout.fillWidth:true }
+                        Label { text:root.t("Each check runs for up to 5 seconds at low brightness. Other sections stay dark."); wrapMode:Text.WordWrap; Layout.fillWidth:true;opacity:.7 }
+                        Label { visible:root.layoutDirty; text:root.t("Save the layout before testing a section."); wrapMode:Text.WordWrap; Layout.fillWidth:true }
+                        Button { text:root.t("Stop strip test");visible:!!root.calibration.active;onClicked:bridge.action("first-light-stop",[]) }
                         Repeater {
                             model:root.draftSections
                             Frame { id:section; required property int index; required property var modelData; Layout.fillWidth:true
@@ -212,6 +248,11 @@ ApplicationWindow {
                                         CheckBox { text:root.t("Reverse"); checked:section.modelData.reverse; enabled:!root.demo; onClicked:root.editSection(section.index,"reverse",checked) }
                                     }
                                     ComboBox { model:[root.t("Left"),root.t("Right"),root.t("Top"),root.t("Bottom"),root.t("Custom")]; property var keys:["left","right","top","bottom","custom"]; currentIndex:keys.indexOf(section.modelData.placement); enabled:!root.demo; onActivated:root.editSection(section.index,"placement",keys[currentIndex]) }
+                                    Label { text:(section.modelData.reverse ? section.modelData.start+section.modelData.count : section.modelData.start+1)+" → "+(section.modelData.reverse ? section.modelData.start+1 : section.modelData.start+section.modelData.count)+" · "+(section.modelData.reverse ? root.t("Reverse") : root.t("Forward"));opacity:.65 }
+                                    RowLayout {
+                                        Button { objectName:"directionTest"+section.index;text:root.t("Check direction");enabled:root.canTest;onClicked:bridge.action("first-light",[section.modelData.id,"chase"]) }
+                                        Button { text:root.t("Check RGB colors");enabled:root.canTest;onClicked:bridge.action("first-light",[section.modelData.id,"rgb"]) }
+                                    }
                                 }
                             }
                         }
@@ -240,43 +281,55 @@ ApplicationWindow {
                     ColumnLayout {
                         width:parent.width; spacing:12; enabled:!root.demo
                         Label { text:root.t("Device and firmware"); font.pixelSize:19; font.weight:Font.DemiBold }
+                        ComboBox { Layout.fillWidth:true; model:[root.t("I have a WESP receiver"),root.t("I have WLED"),root.t("Set up a new ESP")];currentIndex:root.setupPath;onActivated:root.setupPath=currentIndex }
+                        Label { text:root.nativeSelected && (root.prefs.controller || {}).connection==="wifi" ? root.t("Your paired ESP is available over Wi-Fi. USB is not needed to configure LED outputs.") : root.t("Select a USB port. Installation and first pairing require USB."); wrapMode:Text.WordWrap; Layout.fillWidth:true;opacity:.7 }
                         RowLayout {
+                            visible:root.usbSetup
                             ComboBox { Layout.fillWidth:true; model:root.data.ports || []; textRole:"label"; onActivated:root.selectedPort=model[currentIndex].port }
                             Button { text:root.t("Find"); enabled:!bridge.busy && !root.firmwareBusy; onClicked:bridge.action("ports",[]) }
                         }
-                        Label { text:root.selectedPort; visible:!!root.selectedPort; opacity:.65 }
+                        Label { text:root.selectedPort; visible:root.usbSetup && !!root.selectedPort; opacity:.65 }
                         RowLayout {
-                            Button { text:root.t("Connect selected ESP"); enabled:!!root.selectedPort && !bridge.busy && !root.firmwareBusy; onClicked:bridge.action("enroll",[root.selectedPort]) }
-                            Button { text:root.t("Read WESP receiver"); enabled:!!root.selectedPort && !bridge.busy && !root.firmwareBusy; onClicked:root.setup("probe") }
+                            Button { text:root.t("Connect selected ESP");visible:root.setupPath===1; enabled:!!root.selectedPort && !bridge.busy && !root.firmwareBusy; onClicked:bridge.action("enroll",[root.selectedPort]) }
+                            Button { objectName:"readReceiverButton";text:root.t("Read ESP settings");visible:root.setupPath!==1; enabled:(root.nativeSelected || !!root.selectedPort) && !bridge.busy && !root.firmwareBusy; onClicked:root.setup(root.nativeSelected && root.setupPath===0 ? "status" : "probe") }
                         }
+                        Label { text:root.data.setup_error || root.data.setup_note || "";wrapMode:Text.WordWrap;Layout.fillWidth:true;visible:!!text }
+                        Button { text:root.t("Retry reading settings");visible:!!root.data.setup_error;enabled:!bridge.busy;onClicked:bridge.action("setup",["retry",{}]) }
                         Label { visible:!!root.receiver.mac; text:"ESP: "+(root.receiver.mac || ""); font.weight:Font.DemiBold }
+                        Label { text:root.t("1. LED outputs");visible:!!root.receiver.mac;font.pixelSize:17;font.weight:Font.DemiBold }
                         Repeater {
                             model:root.outputs
                             RowLayout { id:output; required property int index; required property var modelData
                                 Label { text:"GPIO" }
-                                SpinBox { from:0;to:39;value:output.modelData.gpio;editable:true;onValueModified:root.editOutput(output.index,"gpio",value) }
+                                ComboBox { objectName:"outputGpio"+output.index;enabled:root.canConfigure;model:root.gpioPins.map(function(pin){return pin<0 ? root.t("Choose GPIO") : "G"+pin;});currentIndex:Math.max(0,root.gpioPins.indexOf(output.modelData.gpio));onActivated:root.editOutput(output.index,"gpio",root.gpioPins[currentIndex]) }
                                 Label { text:root.t("LEDs") }
-                                SpinBox { from:1;to:1024;value:output.modelData.count;editable:true;onValueModified:root.editOutput(output.index,"count",value) }
-                                ComboBox { model:["RGB","RBG","GRB","GBR","BRG","BGR"];currentIndex:model.indexOf(output.modelData.order);onActivated:root.editOutput(output.index,"order",currentText) }
-                                Button { text:root.t("Remove");onClicked:{var a=root.outputs.slice();a.splice(output.index,1);root.outputs=a;root.outputsDirty=true;} }
+                                SpinBox { objectName:"outputCount"+output.index;from:1;to:1024;value:output.modelData.count;editable:true;enabled:root.canConfigure;onValueModified:root.editOutput(output.index,"count",value) }
+                                ComboBox { model:["RGB","RBG","GRB","GBR","BRG","BGR"];enabled:root.canConfigure;currentIndex:model.indexOf(output.modelData.order);onActivated:root.editOutput(output.index,"order",currentText) }
+                                Button { text:root.t("Remove");enabled:root.canConfigure;onClicked:{var a=root.outputs.slice();a.splice(output.index,1);root.outputs=a;root.outputsDirty=true;} }
                             }
                         }
-                        Button { text:root.t("Add LED output"); enabled:!!root.receiver.mac && root.outputs.length<8; onClicked:{var a=root.outputs.slice();a.push({gpio:0,count:1,order:"GRB"});root.outputs=a;root.outputsDirty=true;} }
-                        RowLayout { Label { text:root.t("LED current limit, mA") } SpinBox { id:currentLimit;objectName:"currentLimit";from:100;to:5000;stepSize:100;value:root.currentBudget;editable:true;onValueModified:{root.currentBudget=value;root.outputsDirty=true;} } }
-                        TextField { id:ssid;Layout.fillWidth:true;placeholderText:root.t("Wi-Fi network name (optional)");onTextEdited:root.wifiDirty=true }
-                        TextField { id:password;objectName:"wifiPassword";Layout.fillWidth:true;placeholderText:root.t("Wi-Fi password");echoMode:TextInput.Password;onTextEdited:root.wifiDirty=true }
-                        Button { text:root.t("Save outputs and network to ESP");enabled:!!root.receiver.mac && !!root.outputs.length && !bridge.busy && !root.firmwareBusy;onClicked:root.setup("configure") }
+                        Button { text:root.t("Add LED output"); enabled:root.canConfigure && root.outputs.length<8; onClicked:{var a=root.outputs.slice();a.push({gpio:-1,count:1,order:"GRB"});root.outputs=a;root.outputsDirty=true;} }
+                        RowLayout { Label { text:root.t("LED current limit, mA") } SpinBox { id:currentLimit;objectName:"currentLimit";from:100;to:5000;stepSize:100;value:root.currentBudget;editable:true;enabled:root.canConfigure;onValueModified:{root.currentBudget=value;root.outputsDirty=true;} } }
+                        TextField { id:ssid;Layout.fillWidth:true;visible:!root.receiverWifi;placeholderText:root.t("Wi-Fi network name (optional)");onTextEdited:root.wifiDirty=true }
+                        TextField { id:password;objectName:"wifiPassword";Layout.fillWidth:true;visible:!root.receiverWifi;placeholderText:root.t("Wi-Fi password");echoMode:TextInput.Password;onTextEdited:root.wifiDirty=true }
+                        Label { text:root.t("Connect USB to change the Wi-Fi network. LED outputs can be saved over Wi-Fi.");visible:root.receiverWifi;wrapMode:Text.WordWrap;Layout.fillWidth:true;opacity:.7 }
+                        Label { objectName:"outputValidation";text:root.outputError;visible:!!text;wrapMode:Text.WordWrap;Layout.fillWidth:true }
+                        Button { objectName:"saveOutputsButton";text:root.receiverWifi ? root.t("Save LED outputs over Wi-Fi") : root.t("Save outputs and network to ESP");enabled:!root.outputError && !bridge.busy && !root.firmwareBusy;onClicked:root.setup("configure") }
+                        Label { text:root.t("2. Check each strip");visible:!!root.receiver.mac;font.pixelSize:17;font.weight:Font.DemiBold }
+                        Button { text:root.t("Open strip checks");visible:!!root.receiver.mac;onClicked:root.page=2 }
+                        Label { text:root.t("3. Wi-Fi and separate power");visible:!!root.receiver.mac;font.pixelSize:17;font.weight:Font.DemiBold }
                         Label { text:root.receiver.wifi && root.receiver.wifi.connected ? root.t("Wi-Fi connected")+": "+root.receiver.wifi.ip : root.t("Wi-Fi is not connected yet"); opacity:.7 }
                         RowLayout {
                             Button { text:root.t("Check Wi-Fi");enabled:!!root.receiver.mac && !bridge.busy;onClicked:root.setup("status") }
-                            Button { text:root.receiver.connection==="wifi" ? root.t("Using Wi-Fi") : root.t("Use Wi-Fi");enabled:!!root.receiver.wifi && root.receiver.wifi.connected && root.receiver.connection!=="wifi" && !bridge.busy;onClicked:root.setup("wifi") }
+                            Button { text:root.receiver.connection==="wifi" ? root.t("Using Wi-Fi") : root.t("Use Wi-Fi");enabled:!!root.data.wifi_verified && root.receiver.connection!=="wifi" && !bridge.busy;onClicked:root.setup("wifi") }
                         }
-                        Label { text:root.t("Install on a new ESP"); font.pixelSize:19; font.weight:Font.DemiBold; topPadding:20 }
+                        Label { text:root.t("Install on a new ESP");visible:root.setupPath===2; font.pixelSize:19; font.weight:Font.DemiBold; topPadding:20 }
                         RowLayout {
+                            visible:root.setupPath===2
                             Button { text:root.t("Prepare WESP firmware");enabled:!!root.selectedPort && !root.firmwareBusy && !bridge.busy;onClicked:{root.replaceConfirmed=false;bridge.action("firmware-prepare-native",[root.selectedPort]);} }
                             Button { text:root.t("Prepare WLED firmware");enabled:!!root.selectedPort && !root.firmwareBusy && !bridge.busy;onClicked:{root.replaceConfirmed=false;bridge.action("firmware-prepare",[root.selectedPort]);} }
                         }
-                        Label { text:(root.job.error || root.job.stage || "")+" "+(root.job.percent === undefined ? "" : root.job.percent+"%")+"\n"+(root.job.board ? "ESP: "+root.job.board.mac+" · "+(root.job.port || "")+"\n" : "")+(root.job.backup || "");wrapMode:Text.WordWrap;Layout.fillWidth:true;visible:!!root.job.stage && root.job.stage!=="idle" }
+                        Label { text:(root.job.error || root.job.label || "")+" "+(root.job.percent === undefined ? "" : root.job.percent+"%")+"\n"+(root.job.board ? "ESP: "+root.job.board.mac+" · "+(root.job.port || "")+"\n" : "")+(root.job.backup || "");wrapMode:Text.WordWrap;Layout.fillWidth:true;visible:!!root.job.stage && root.job.stage!=="idle" }
                         CheckBox { text:root.t("Replace the firmware and erase all settings on this ESP"); visible:root.job.stage==="prepared";checked:root.replaceConfirmed;onClicked:root.replaceConfirmed=checked }
                         RowLayout {
                             Button { text:root.t("Install firmware");visible:root.job.stage==="prepared";enabled:root.replaceConfirmed && !bridge.busy;onClicked:bridge.action("firmware-install",[root.job.token]) }

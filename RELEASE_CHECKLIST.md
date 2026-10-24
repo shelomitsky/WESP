@@ -1,6 +1,6 @@
 # Release candidate acceptance
 
-Product: WESP. Version: 0.2.0-alpha.9. Author: Chapman. License: MIT.
+Product: WESP. Version: 0.2.0-alpha.10. Author: Chapman. License: MIT.
 The first alpha targets KDE Plasma 6; the product name is desktop-independent.
 
 ## Standalone application — alpha.8
@@ -19,6 +19,22 @@ The first alpha targets KDE Plasma 6; the product name is desktop-independent.
 - [ ] Visible language/theme/layout acceptance of all application pages.
 
 Guided first-light and spatial wallpapers remain future milestones.
+
+## First light and Wi-Fi configuration — alpha.10
+
+- [x] Owner-driven dim chase/RGB checks expire without a GUI producer; Off stops
+  the test and cannot be undone by restoring a scene. Demo checks are isolated.
+- [x] Actual Qt tests cover paired Wi-Fi read/save without a USB port, uncommitted
+  text surviving polling, actionable GPIO validation and demo test cancellation.
+- [x] Local TCP tests cover authenticated CFG, new counts, independent read-back,
+  old firmware rejection, USB-only network changes and explicit count recovery.
+- [x] Native firmware 0.1.2 compiles with the pinned ESP32 toolchain; C++ core
+  policy/watchdog/status tests pass under sanitizers.
+- [ ] Independent code review and CI on the final commit.
+- [ ] Firmware update on the identified test ESP, preserving NVS/pairing, followed
+  by physical Wi-Fi output configuration, read-back and power-cycle persistence.
+- [ ] Physical direction/RGB checks, cancellation, Off/sleep and current-scene
+  resumption from the standalone window. Demo is not physical acceptance.
 
 ## Music scenes — alpha.9
 

@@ -854,3 +854,165 @@ msgstr "Мягко"
 
 msgid "Vivid"
 msgstr "Выразительно"
+
+msgid "1. LED outputs"
+msgstr "1. Выходы лент"
+
+msgid "2. Check each strip"
+msgstr "2. Проверка каждой ленты"
+
+msgid "3. Wi-Fi and separate power"
+msgstr "3. Wi-Fi и отдельное питание"
+
+msgid "Add at least one LED output."
+msgstr "Добавьте хотя бы один выход ленты."
+
+msgid "Backup ready. Confirm firmware replacement."
+msgstr "Резервная копия готова. Подтвердите замену прошивки."
+
+msgid "Check RGB colors"
+msgstr "Проверить цвета RGB"
+
+msgid "Check Wi-Fi before switching the connection"
+msgstr "Проверьте Wi-Fi перед переключением подключения"
+
+msgid "Check direction"
+msgstr "Проверить направление"
+
+msgid "Checking strip: %1"
+msgstr "Проверка ленты: %1"
+
+msgid "Choose GPIO"
+msgstr "Выберите GPIO"
+
+msgid "Choose a GPIO for every output."
+msgstr "Выберите GPIO для каждого выхода."
+
+msgid "Choose a direction or RGB test"
+msgstr "Выберите проверку направления или RGB"
+
+msgid "Choose a saved strip to test"
+msgstr "Выберите сохранённую ленту для проверки"
+
+msgid "Connect USB to change the Wi-Fi network. LED outputs can be saved over Wi-Fi."
+msgstr "Для смены сети подключите USB. Выходы лент можно сохранять по Wi-Fi."
+
+msgid "Controller connected"
+msgstr "Контроллер подключён"
+
+msgid "Could not configure the receiver. Check the connection and output settings, then read the settings again."
+msgstr "Не удалось настроить контроллер. Проверьте подключение и параметры выходов, затем повторите чтение настроек."
+
+msgid "Downloading firmware"
+msgstr "Загрузка прошивки"
+
+msgid "Each check runs for up to 5 seconds at low brightness. Other sections stay dark."
+msgstr "Каждая проверка длится до 5 секунд на низкой яркости. Остальные секции не светятся."
+
+msgid "Each output needs a different GPIO."
+msgstr "Для каждого выхода нужен отдельный GPIO."
+
+msgid "Firmware installed"
+msgstr "Прошивка установлена"
+
+msgid "Firmware installed. Reading settings failed — retry the read."
+msgstr "Прошивка установлена. Не удалось прочитать настройки — повторите чтение."
+
+msgid "Firmware written. Finish setup."
+msgstr "Прошивка записана. Завершите настройку."
+
+msgid "Forward"
+msgstr "Прямое направление"
+
+msgid "I have WLED"
+msgstr "У меня уже есть WLED"
+
+msgid "I have a WESP receiver"
+msgstr "У меня уже есть контроллер WESP"
+
+msgid "Identifying the selected ESP"
+msgstr "Определение выбранной ESP"
+
+msgid "Installation cancelled"
+msgstr "Установка отменена"
+
+msgid "Installation failed; the backup is retained"
+msgstr "Установка не удалась; резервная копия сохранена"
+
+msgid "Invalid strip test request"
+msgstr "Некорректный запрос проверки ленты"
+
+msgid "Open strip checks"
+msgstr "Перейти к проверке лент"
+
+msgid "Outputs saved on the ESP. Test the strips, then verify Wi-Fi."
+msgstr "Выходы сохранены в ESP. Проверьте ленты, затем Wi-Fi."
+
+msgid "Preparing installation"
+msgstr "Подготовка установки"
+
+msgid "Preparing installation tools"
+msgstr "Подготовка средств установки"
+
+msgid "Read ESP settings"
+msgstr "Прочитать настройки ESP"
+
+msgid "Read the ESP settings first."
+msgstr "Сначала прочитайте настройки ESP."
+
+msgid "Receiver settings read. Configure its LED outputs."
+msgstr "Настройки ESP прочитаны. Задайте выходы лент."
+
+msgid "Retry reading settings"
+msgstr "Повторить чтение настроек"
+
+msgid "Save LED outputs over Wi-Fi"
+msgstr "Сохранить выходы лент по Wi-Fi"
+
+msgid "Save the layout before testing a section."
+msgstr "Сохраните расположение лент перед проверкой секции."
+
+msgid "Saving the original firmware"
+msgstr "Сохранение исходной прошивки"
+
+msgid "Select a USB port. Installation and first pairing require USB."
+msgstr "Выберите USB-порт. Установка и первая привязка выполняются по USB."
+
+msgid "Select the USB receiver before reading settings"
+msgstr "Выберите USB-контроллер перед чтением настроек"
+
+msgid "Set a length from 1 to 1024 LEDs."
+msgstr "Укажите длину от 1 до 1024 светодиодов."
+
+msgid "Set up a new ESP"
+msgstr "Настроить новую ESP"
+
+msgid "Stop strip test"
+msgstr "Остановить проверку ленты"
+
+msgid "Strip tests are paused during sleep"
+msgstr "Проверки лент приостановлены на время сна"
+
+msgid "The save could not be confirmed. Read the ESP settings again before retrying."
+msgstr "Не удалось подтвердить сохранение. Перед повторной попыткой прочитайте настройки ESP."
+
+msgid "The total length cannot exceed 1024 LEDs."
+msgstr "Общая длина не должна превышать 1024 светодиода."
+
+msgid "Turn on the lighting before testing a strip"
+msgstr "Включите подсветку перед проверкой ленты"
+
+msgid "Update the ESP firmware over USB once to enable configuration over Wi-Fi."
+msgstr "Для настройки по Wi-Fi один раз обновите прошивку ESP через USB."
+
+msgid "Using Wi-Fi. You can move the ESP to a separate power supply."
+msgstr "Работаем по Wi-Fi. Можно перевести ESP на отдельный блок питания."
+
+msgid "Wi-Fi verified for this receiver."
+msgstr "Связь по Wi-Fi с этой ESP подтверждена."
+
+msgid "Writing and verifying firmware"
+msgstr "Запись и проверка прошивки"
+
+msgid "Your paired ESP is available over Wi-Fi. USB is not needed to configure LED outputs."
+msgstr "Привязанная ESP доступна по Wi-Fi. Настраивать выходы лент можно без USB."

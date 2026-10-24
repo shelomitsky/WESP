@@ -30,10 +30,14 @@ class Bridge:
                     if not isinstance(data,dict):
                         raise ValueError('Invalid setup request')
                     result=dict(ok=True,receiver=callback(data))
-                except Exception:
+                except Exception as error:
                     # Firmware/network exceptions may include request details;
                     # return a fixed public error, never repr(request/password).
                     result=dict(ok=False,error='Could not configure the receiver. Check the USB connection and settings.')
+                    from wesp_transport import ConfigurationError
+                    if isinstance(error,ConfigurationError) and error.code in {
+                            'network_requires_usb','firmware_update_required','configuration_unconfirmed'}:
+                        result['error_code']=error.code
                 body=json.dumps(result).encode()
                 self.send_response(200)
                 self.send_header('Content-Type','application/json')

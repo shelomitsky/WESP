@@ -81,6 +81,40 @@ def serve_test_peer():
 
 
 class IPCIntegrationTest(unittest.TestCase):
+    def calibration_layout(self):
+        self.configure(count=4)
+        (self.base/'peer.json').write_text(json.dumps({'ports':{PORT:{'count':4}}}))
+        prefs=json.loads(self.settings_file.read_text())
+        prefs['sections']=[dict(id='a',name='A',start=1,count=2,reverse=True,placement='left')]
+        self.settings_file.write_text(json.dumps(prefs))
+
+    def test_owner_ends_identification_without_any_gui_producer_or_keepalive(self):
+        self.calibration_layout();process=self.start_service();self.wait_ready(process)
+        started=self.client("usb.client(calibration={'action':'start','section':'a','style':'rgb'})")
+        self.assertTrue(started['ok'],started)
+        until=started['result']['until']
+        blocked=self.client('usb.client(pixels=[[255,255,255]]*4)')
+        self.assertFalse(blocked['result'],'ordinary frames must yield to the finite test')
+        current=self.client("usb.client(calibration={'action':'status'})")
+        self.assertEqual(current['result']['until'],until,'polling must not renew the test')
+        deadline=time.monotonic()+5
+        while time.monotonic()<deadline:
+            current=self.client("usb.client(calibration={'action':'status'})")
+            if not current['result']['active']:break
+            time.sleep(.1)
+        self.assertFalse(current['result']['active'])
+        frame=json.loads((self.base/'runtime/app/frame-preview.json').read_text())
+        self.assertEqual(frame['pixels'],[[0,0,0]]*4)
+        self.assertTrue(self.client('usb.client()')['result']['on'])
+
+    def test_off_cancels_owner_identification_without_restarting_it(self):
+        self.calibration_layout();process=self.start_service();self.wait_ready(process)
+        self.assertTrue(self.client("usb.client(calibration={'action':'start','section':'a','style':'chase'})")['ok'])
+        self.assertTrue(self.client("usb.client({'on':False})")['ok'])
+        self.assertFalse(self.client("usb.client(calibration={'action':'status'})")['result']['active'])
+        time.sleep(.15)
+        self.assertFalse(self.client('usb.client()')['result']['on'])
+
     def test_preview_exports_the_sent_frame_and_off_through_the_real_owner(self):
         process = self.start_service()
         self.wait_ready(process)

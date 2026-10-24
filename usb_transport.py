@@ -33,12 +33,14 @@ def adalight(pixels):
     return b'Ada' + bytes([high, low, high ^ low ^ 0x55]) + bytes(v for rgb in pixels for v in rgb)
 
 
-def client(payload=None, pixels=None, link=False, baud=None, enroll=None, expected=None):
+def client(payload=None, pixels=None, link=False, baud=None, enroll=None, expected=None, calibration=None):
     message = dict(kind='pixels', pixels=pixels) if pixels is not None else dict(kind='state', payload=payload)
     if link:
         message = dict(kind='link')
     if baud is not None:
         message = dict(kind='baud', baud=baud)
+    if calibration is not None:
+        message = dict(kind='calibration',calibration=calibration)
     if enroll is not None:
         message = dict(kind='enroll', port=enroll)
         if expected is not None:
@@ -310,6 +312,31 @@ def serve():
     device = selected_device(configured) if configured else None
     device_lock = threading.RLock()
     stop = threading.Event()
+    wake = threading.Event()
+    calibration = [None]
+
+    def cancel_calibration(blank=True):
+        lease=calibration[0]
+        calibration[0]=None
+        if lease is None or device is None or device.expected_mac!=lease.mac:
+            return
+        if hasattr(device,'last_frame'):
+            device.last_frame=None
+        if blank:
+            try:
+                pixels=[[0,0,0] for _ in range(device.led_count)]
+                device.pixels(pixels)
+                publisher.publish(pixels,device.expected_mac,source='calibration',force=True)
+            except (OSError,ValueError,TimeoutError):
+                LOG.debug('Calibration stopped without output',exc_info=True)
+
+    def calibration_status():
+        import first_light
+        lease=calibration[0]
+        if lease and not first_light.active(control.settings(),{'firstLight':lease.record()}):
+            cancel_calibration()
+            lease=None
+        return lease.record() if lease else dict(active=False)
 
     def enroll_device(command):
         nonlocal device
@@ -321,6 +348,7 @@ def serve():
         # threaded server can handle it; device_lock must not be held yet.
         control.prepare_enrollment()
         with device_lock:
+            cancel_calibration()
             old=device
             if old is not None:
                 try:
@@ -363,10 +391,14 @@ def serve():
                     port=command.get('port','')
                     if not re.fullmatch(r'/dev/tty(?:USB|ACM)[0-9]+',port):
                         raise ValueError('Invalid USB port')
+                    expected_mac=command.get('expected_mac')
+                    if expected_mac and not re.fullmatch('[0-9a-f]{12}',expected_mac):
+                        raise ValueError('Invalid expected receiver MAC')
+                    cancel_calibration()
                     old=device
                     if old is not None:
                         old.close()
-                    candidate=wesp_transport.Device(port,discover=True)
+                    candidate=wesp_transport.Device(port,expected_mac=expected_mac or None,discover=True)
                     try:
                         result=candidate.setup_status()
                         candidate.pair()
@@ -376,26 +408,31 @@ def serve():
                     device=candidate
                     return result
                 if not isinstance(device,wesp_transport.Device) or command.get('mac')!=device.expected_mac:
-                    raise ValueError('Select and read the USB receiver first')
+                    raise ValueError('Select and read the WESP receiver first')
                 if action=='status':
-                    return device.setup_status()
+                    return device.setup_status(refresh_count=True)
                 target=device
                 if action=='configure':
-                    if device.connection!='usb':
-                        raise ValueError('Use USB to configure this receiver')
                     wesp_transport.validate_outputs(command.get('outputs'),command.get('max_milliamps',500))
-            # Restore overlays only after the action/target has been validated,
-            # outside device_lock because restoration may use the owner RPC.
-            control.prepare_enrollment()
+                    if device.connection!='usb' and (command.get('ssid') is not None or command.get('password') is not None):
+                        raise wesp_transport.ConfigurationError('network_requires_usb','Use USB to change the WESP Wi-Fi network')
+            # Native configure itself darkens and clears old output ownership.
+            # Replaying overlays here can block recovery after a lost CFG ACK
+            # when the receiver's count already differs from saved settings.
+            if action!='configure':
+                control.prepare_enrollment()
             with device_lock:
                 if device is not target or command.get('mac')!=device.expected_mac:
                     raise ValueError('The receiver changed during setup')
                 if action=='configure':
+                    cancel_calibration()
                     result=device.configure(command.get('outputs'),command.get('max_milliamps',500),
                                             ssid=command.get('ssid'),password=command.get('password'))
                     selected=dict(port=device.port,mac=device.expected_mac,count=device.led_count,
-                                  backend='wesp',connection='usb')
-                    control.persist_enrollment(selected)
+                                  backend='wesp',connection=device.connection)
+                    if device.connection=='wifi':
+                        selected.update(host=device.host,fallback_host=device.fallback_host)
+                    control.persist_enrollment(selected,preserve_scene=True)
                     return result
                 info=device.setup_status()
                 wifi=info['wifi']
@@ -433,11 +470,17 @@ def serve():
                             raise ValueError(tr("Select a controller first"))
                         require_target(command,device)
                         if command['kind']=='state':
+                            if command.get('payload') and calibration[0]:
+                                cancel_calibration(blank=command['payload'].get('on') is not False)
                             result=device.state(command.get('payload'))
                             if result.get('on') is False:
                                 publisher.publish([[0,0,0] for _ in range(device.led_count)],
                                                   device.expected_mac, source='off', force=True)
                         elif command['kind']=='pixels':
+                            if calibration_status()['active']:
+                                response=dict(ok=True,result=False)
+                                self.wfile.write(json.dumps(response).encode()+b'\n')
+                                return
                             result=device.pixels(command['pixels'])
                             if result is not False and time.monotonic()-publisher.last >= .1:
                                 try:
@@ -456,6 +499,36 @@ def serve():
                                     LOG.debug('Preview metadata unavailable',exc_info=True)
                         elif command['kind']=='link':
                             result=device.link_status()
+                        elif command['kind']=='calibration':
+                            import first_light
+                            fields=command['calibration']
+                            if not isinstance(fields,dict):
+                                raise ValueError(tr('Invalid strip test request'))
+                            action=fields.get('action')
+                            if action=='start':
+                                device.query()
+                                if not device.state()['on']:
+                                    raise ValueError(tr('Turn on the lighting before testing a strip'))
+                                current=control.settings()
+                                require_target(command,device)
+                                calibration[0]=first_light.Lease(current,fields.get('section'),fields.get('style'))
+                                try:
+                                    frame=calibration[0].frame()
+                                    device.pixels(frame)
+                                    publisher.publish(frame,device.expected_mac,source='calibration',force=True)
+                                except Exception:
+                                    cancel_calibration(blank=False)
+                                    raise
+                                result=calibration[0].record()
+                                wake.set()
+                            elif action=='stop':
+                                cancel_calibration()
+                                result=dict(active=False)
+                                wake.set()
+                            elif action=='status':
+                                result=calibration_status()
+                            else:
+                                raise ValueError(tr('Invalid strip test request'))
                         elif command['kind']=='baud':
                             result=device.set_baud(command['baud'])
                         else:
@@ -470,19 +543,38 @@ def serve():
                 pass
 
     def refresh():
+        last_query=0
         while not stop.is_set():
             try:
                 with device_lock:
                     if device is not None:
-                        if hasattr(device,'maintain'):
+                        if calibration_status()['active']:
+                            lease=calibration[0]
+                            if not device.state()['on']:
+                                cancel_calibration(blank=False)
+                            else:
+                                frame=lease.frame()
+                                if frame is None:
+                                    cancel_calibration()
+                                else:
+                                    device.pixels(frame)
+                                    publisher.publish(frame,device.expected_mac,source='calibration')
+                        elif hasattr(device,'maintain'):
                             device.maintain()
-                        device.query()
+                        interval=.25 if hasattr(device,'maintain') else 1
+                        if calibration[0] is None or time.monotonic()-last_query>=interval:
+                            device.query()
+                            last_query=time.monotonic()
             except Exception:
+                with device_lock:
+                    cancel_calibration(blank=False)
                 LOG.exception('USB state refresh failed; retrying')
-            stop.wait(.25 if device is not None and hasattr(device,'maintain') else 1)
+            wake.wait(.05 if calibration[0] else .25 if device is not None and hasattr(device,'maintain') else 1)
+            wake.clear()
 
     def finish(*_):
         stop.set()
+        wake.set()
 
     signal.signal(signal.SIGTERM, finish)
     signal.signal(signal.SIGINT, finish)

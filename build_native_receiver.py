@@ -63,7 +63,7 @@ def build(output: Path, pio: str) -> Path:
         data = destination.read_bytes()
         files.append({"file": name, "offset": offset, "size": len(data),
                       "sha256": hashlib.sha256(data).hexdigest()})
-    manifest = {"firmware": "WESP", "version": "0.1.1", "proto": 1,
+    manifest = {"firmware": "WESP", "version": "0.1.2", "proto": 1,
                 "chip": "esp32", "flash_size": 4194304, "flash_mode": "dio",
                 "flash_freq": "40m", "platform": "espressif32@6.5.0",
                 "framework": "arduinoespressif32@3.20014.231204", "images": files}

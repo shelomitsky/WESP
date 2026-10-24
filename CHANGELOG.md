@@ -1,4 +1,17 @@
-# 0.2.0-alpha.9 (candidate)
+# 0.2.0-alpha.10 (candidate)
+
+- Add dim, bounded direction/RGB checks for individual saved strips, with
+  owner-driven expiry, Stop/Off and an isolated virtual demo.
+- Guide receiver setup through output configuration, strip checks and verified
+  Wi-Fi handoff; retain draft text during polling and explain invalid GPIOs.
+- Configure an already paired native receiver's GPIOs, LED counts, color order
+  and current budget over Wi-Fi. Confirm saves with independent read-back;
+  retain transport, pairing and scene preferences.
+- Native firmware 0.1.2 advertises Wi-Fi configuration support. First pairing
+  and changing the Wi-Fi network still require USB; upgrading an existing
+  0.1.1 board is a separate, one-time USB firmware update.
+
+# 0.2.0-alpha.9
 
 - Add coherent Pulse accents and retain the original meter, with one renderer
   shared by demo and device and no new audio dependencies.
