@@ -32,14 +32,20 @@ class Publisher:
         self.path=str(Path(runtime)/'audio.sock');self.selected=dict(selected)
         self.socket=socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM);self.socket.setblocking(False)
         self.socket.setsockopt(socket.SOL_SOCKET,socket.SO_SNDBUF,4096)
+        from feature_preview import Writer
+        self.preview=Writer(runtime)
 
     def publish(self,features,captured_ns):
         packet=rt.pack_local(self.selected['mac'],self.selected['count'],captured_ns,
             rt.level(features['rms']),rt.level(features['bass']))
-        try:return self.socket.sendto(packet,self.path)==len(packet)
+        try:sent=self.socket.sendto(packet,self.path)==len(packet)
         except OSError:return False # No retry or queue of yesterday's attacks.
+        if sent:
+            try:self.preview.publish(packet)
+            except (OSError,ValueError):pass # Display must never interrupt audio.
+        return sent
 
-    def close(self):self.socket.close()
+    def close(self):self.preview.close();self.socket.close()
 
 
 def run(hint,stopped,status,analyze):

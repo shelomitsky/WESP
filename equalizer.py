@@ -2,6 +2,7 @@
 """Desktop output -> synchronized USB level meters. Audio stays in memory."""
 from i18n import tr
 import logging
+import math
 import os
 import selectors
 import signal
@@ -113,9 +114,14 @@ class SpatialSpectrum:
         centered = samples-samples.mean()
         fft = np.abs(np.fft.rfft(centered*self.window)) / (self.window.sum()/2)
         bass = np.sqrt(np.sum(fft[(self.hz >= 40) & (self.hz < 180)]**2))
-        self.bass = float(bass)
-        rms = np.sqrt(np.mean(centered**2))
-        self.rms=float(rms)
+        rms = float(np.sqrt(np.mean(centered**2)))
+        return self.features(rms,float(bass))
+
+    def features(self,rms,bass,elapsed=1/60):
+        if (not all(math.isfinite(v) for v in (rms,bass,elapsed)) or not 0<=rms<=1
+                or not 0<=bass<=1 or not 0<=elapsed<=2):raise ValueError('Invalid audio features')
+        self.bass,self.rms=bass,rms
+        cadence=elapsed*USB_FPS
         # Track the recent programme level, independently of the PC's volume.
         # Headroom prevents loud/compressed tracks from pinning the whole bar.
         # Do not learn from silence: the noise gate must not be amplified.
@@ -124,15 +130,15 @@ class SpatialSpectrum:
             target = 0.0
         else:
             rate = .08 if drive > self.reference else .006
-            self.reference += (drive-self.reference)*rate
+            self.reference += (drive-self.reference)*(1-(1-rate)**cadence)
             self.reference = max(.02, self.reference)
             if abs(drive-self.reference) < self.reference*.01:
                 self.reference = max(.02, drive)
             target = float(np.clip(drive/(self.reference*1.4)*self.sensitivity, 0, 1)**1.1)
         if target > self.level:
-            self.level += (target-self.level)*self.attack
+            self.level += (target-self.level)*(1-(1-self.attack)**cadence)
         else:
-            self.level = max(target, self.level*self.release)
+            self.level = max(target, self.level*self.release**cadence)
         if self.level < .02:
             self.level = 0.0
         height = self.level*10

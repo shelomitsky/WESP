@@ -51,6 +51,20 @@ class Renderer:
         self.analyzer.process(samples)
         self.pulse.process(self.analyzer.bass,self.analyzer.gate,now,prefs.get('music_repeat_ms',1000),getattr(self.analyzer,'rms',0)*.8)
 
+    def features(self,rms,bass,prefs,now=None):
+        now=time.monotonic() if now is None else now
+        last=getattr(self,'feature_time',None)
+        elapsed=1/60 if last is None else now-last
+        if not math.isfinite(now):raise ValueError('Invalid music timestamp')
+        if not 0<=elapsed<=2:
+            self.analyzer.level=0;self.analyzer.reference=.1;self.pulse=BeatPulse();elapsed=1/60
+        self.analyzer.set_decay(prefs.get('equalizer_decay_ms',250))
+        self.analyzer.set_response(prefs.get('equalizer_sensitivity',100),prefs.get('equalizer_gate',6))
+        self.analyzer.set_attack(prefs.get('equalizer_attack_ms',0))
+        self.analyzer.features(rms,bass,elapsed)
+        self.pulse.process(bass,self.analyzer.gate,now,prefs.get('music_repeat_ms',1000),rms*.8)
+        self.feature_time=now
+
     def pixels(self,prefs,sections,count,colors=None):
         style = prefs.get('music_style','meter')
         if style not in ('meter','pulse'):
