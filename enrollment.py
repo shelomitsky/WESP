@@ -77,4 +77,3 @@ def persist(selected, prefs, config, runtime, preserve_scene=False):
                 except OSError as error:
                     print('WESP: could not remove enrollment temporary file: '+str(error),file=sys.stderr)
     return prefs
-
