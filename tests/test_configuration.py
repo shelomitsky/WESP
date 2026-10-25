@@ -1,4 +1,5 @@
 import json
+import importlib.util
 import os
 import subprocess
 from pathlib import Path
@@ -182,3 +183,45 @@ class ConfigurationTest(unittest.TestCase):
                 self.assertEqual(control.settings()['controller'],selected)
                 self.assertEqual(control.runtime()['controller_mac'],selected['mac'])
                 self.assertEqual(control.runtime()['base'],{})
+
+    def test_enrollment_storage_accepts_explicit_paths_and_preserves_the_scene(self):
+        self.assertIsNotNone(importlib.util.find_spec('enrollment'),
+                             'Enrollment storage must be separate from command orchestration')
+        import enrollment
+        import manage
+        selected=dict(port='/dev/ttyUSB9',mac='021122334466',count=2)
+        prefs=control.DEFAULTS | dict(equalizer=True,kde=False,host='unchanged')
+        with patch.object(control,'settings',side_effect=AssertionError('Storage must use explicit preferences')):
+            result=enrollment.persist(selected,prefs,self.config,self.runtime,preserve_scene=True)
+        self.assertTrue(result['equalizer'])
+        self.assertFalse(result['kde'])
+        self.assertEqual(result['host'],'unchanged')
+        self.assertEqual(result['controller'],selected)
+        settings_path=self.config/'settings.json'
+        state_path=self.runtime/'state.json'
+        self.assertEqual(settings_path.read_text(),json.dumps(result))
+        self.assertEqual(json.loads(state_path.read_text()),dict(ids=[],volumeUntil=0,base={},
+            suspended=False,resume=None,controller_mac=selected['mac']))
+        for path in (settings_path,state_path):
+            self.assertEqual(path.stat().st_mode & 0o777,0o600)
+        self.assertEqual(list(self.root.rglob('.wesp-enroll-*')),[])
+        self.assertIn('enrollment.py',{path.name for path in manage.payloads()})
+
+    def test_enrollment_failure_restores_original_private_modes(self):
+        paths=(self.config/'settings.json',self.runtime/'state.json')
+        for path,mode in zip(paths,(0o640,0o600)):
+            path.write_text('{}\n')
+            path.chmod(mode)
+        before={path:(path.read_bytes(),path.stat().st_mode & 0o777) for path in paths}
+        replace=Path.replace
+        failed=[]
+        def fail_second_commit(source,target):
+            if Path(target)==paths[0] and not failed:
+                failed.append(True)
+                raise OSError('injected second commit failure')
+            return replace(source,target)
+        with patch.object(Path,'replace',fail_second_commit),self.assertRaises(OSError):
+            control.persist_enrollment(dict(port='/dev/ttyUSB9',mac='021122334466',count=2))
+        self.assertEqual(failed,[True])
+        for path,expected in before.items():
+            self.assertEqual((path.read_bytes(),path.stat().st_mode & 0o777),expected)
