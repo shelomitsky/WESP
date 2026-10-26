@@ -32,3 +32,11 @@ calling enrollment. Other commands keep their existing lock. The owner takes
 command lock before device lock and revalidates ordinary requests under device
 lock. Ordinary RPC must remain available while enrollment waits/restores an
 old snapshot; shutdown joins request threads before closing their Device.
+
+Keep desktop preference defaults and value validation in `preferences.py`.
+Scenes, saved presets and preview share these rules; the native wire schema in
+`effects_config.py` keeps its stricter integer-only validation.
+`enrollment.persist()` owns the two-document enrollment transaction and takes
+preferences and paths explicitly. `control.persist_enrollment()` supplies the
+current settings and paths; lock ownership stays in the USB owner.
+Add new runtime modules to `manage.payloads()` as well as the source archive.

@@ -11,6 +11,7 @@ import time
 
 import control
 import layout
+from preferences import DEFAULTS, validate_value
 
 LOG = logging.getLogger('wesp.preview')
 
@@ -81,7 +82,7 @@ class DemoSession:
         import music
         allowed = ('equalizer_decay_ms', 'equalizer_sensitivity', 'equalizer_gate',
                    'equalizer_attack_ms', 'equalizer_palette','music_style','music_preset','music_custom','music_repeat_ms')
-        self.prefs = {key: copy.deepcopy((prefs or {}).get(key, control.DEFAULTS[key])) for key in allowed}
+        self.prefs = {key: copy.deepcopy((prefs or {}).get(key, DEFAULTS[key])) for key in allowed}
         self.prefs.update(equalizer=True,kde=False)
         self.sections = layout.legacy(20, reverse_second=True)
         self.sections[0]['placement'], self.sections[1]['placement'] = 'left', 'right'
@@ -107,8 +108,7 @@ class DemoSession:
             elif key in self.prefs:
                 if key in ('music_custom','music_preset','equalizer','kde'):
                     raise ValueError('Unsupported demo setting')
-                self.prefs[key] = (control.validate_decay_ms(value) if key == 'equalizer_decay_ms'
-                                   else control.validate_tuning(key, value))
+                self.prefs[key] = validate_value(key, value)
                 import scenes
                 if key in scenes.TUNING:
                     self.prefs['music_preset']='custom'

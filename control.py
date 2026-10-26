@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Shared HTTP/settings helper for the existing WLED desktop services."""
+"""Command orchestration and compatibility entry points for WESP services."""
 from i18n import tr
 import contextlib
 import fcntl
@@ -8,59 +8,16 @@ import os
 from pathlib import Path
 import re
 import sys
-import tempfile
 import time
 import urllib.parse
 import urllib.request
 import first_light
 import hashlib
+from preferences import DEFAULTS, validate_tuning, validate_decay_ms
 
 CONFIG = Path(os.environ.get('WLED_CONFIG_DIR', str(Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home()/'.config'))) / 'wled-control-desktop')))
 RUNTIME = Path(os.environ.get('WLED_RUNTIME_DIR',
                str(Path(os.environ.get('XDG_RUNTIME_DIR', f'/tmp/wled-control-desktop-{os.getuid()}')) / 'wled-control-desktop')))
-DEFAULTS = dict(host='', kde=True, volume=True, notify=True,
-                equalizer=False, transport='usb', reverse_first=False, reverse_second=False,
-                equalizer_decay_ms=250, controller=None, sections=[])
-DEFAULTS.update(equalizer_sensitivity=100,equalizer_gate=6,notify_style='flash',
-                notify_color='#8000ff',notify_strength=60,equalizer_attack_ms=0,
-                equalizer_palette='classic',music_style='meter',music_preset='custom',music_custom={})
-DEFAULTS.update(music_repeat_ms=1000,wallpaper_timeout_ms=8000,wallpaper_fade_ms=1000,native_presets=[])
-
-
-def validate_tuning(key,value):
-    if key=='music_style':
-        if value not in ('meter','pulse'):
-            raise ValueError(tr('Unknown music style'))
-        return value
-    if key=='equalizer_palette':
-        import layout
-        layout.palette_colors(value)
-        return value
-    if key=='notify_style':
-        if value not in ('flash','pulse','tint','pixel'):
-            raise ValueError(tr("Unknown notification style"))
-        return value
-    if key=='notify_color':
-        if not isinstance(value,str) or not re.fullmatch(r'#[0-9a-fA-F]{6}',value):
-            raise ValueError(tr("Color must use the #RRGGBB format"))
-        return value.lower()
-    low,high={'equalizer_sensitivity':(50,200),'equalizer_gate':(0,30),
-              'equalizer_attack_ms':(0,300),'notify_strength':(10,100),'music_repeat_ms':(0,5000),
-              'wallpaper_timeout_ms':(1500,60000),'wallpaper_fade_ms':(0,10000)}[key]
-    if type(value) is str and re.fullmatch(r'[0-9]+',value):
-        value=int(value)
-    if type(value) is not int or not low<=value<=high:
-        raise ValueError(tr('Value must be an integer from %1 to %2',low,high))
-    if key=='music_repeat_ms' and 0<value<180:raise ValueError(tr('Repeated pulses must be at least 180 ms apart'))
-    return value
-
-
-def validate_decay_ms(value):
-    if type(value) is str and re.fullmatch(r'[0-9]+', value):
-        value = int(value)
-    if type(value) is not int or not 80 <= value <= 600:
-        raise ValueError(tr("Decay must be an integer from 80 to 600 ms"))
-    return value
 
 
 def read_json(path, default):
@@ -90,76 +47,9 @@ def settings():
 
 
 def persist_enrollment(selected,preserve_scene=False):
-    """Prepare both documents before the USB owner commits its new Device."""
-    import layout
-    prefs=settings()
-    previous=prefs.get('controller') or {}
-    sections=None
-    if previous.get('mac')==selected['mac'] and prefs.get('sections'):
-        try:
-            sections=layout.validate(prefs['sections'],selected['count'])
-        except ValueError:
-            if previous.get('count')==selected['count']:
-                raise
-    if sections is None:
-        sections=[dict(id='main',name=tr("Lighting"),start=0,count=selected['count'],
-                       reverse=False,placement='custom')]
-    prefs.update(controller=selected,sections=sections,transport='usb')
-    if not preserve_scene:
-        prefs['equalizer']=False
-    documents={RUNTIME/'state.json':dict(ids=[],volumeUntil=0,base={},suspended=False,
-                                        resume=None,controller_mac=selected['mac']),
-               CONFIG/'settings.json':prefs}
-    temporary=[]
-    retained=set()
-    prepared,previous={},{}
-    applied=[]
-
-    def stage(path,data,mode):
-        fd,name=tempfile.mkstemp(prefix='.wesp-enroll-',dir=path.parent)
-        staged=Path(name)
-        temporary.append(staged)
-        with os.fdopen(fd,'wb') as stream:
-            os.fchmod(stream.fileno(),mode)
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        return staged
-
-    try:
-        for path,value in documents.items():
-            path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
-            prepared[path]=stage(path,json.dumps(value).encode(),0o600)
-            previous[path]=stage(path,path.read_bytes(),path.stat().st_mode & 0o777) if path.exists() else None
-        try:
-            for path in documents:
-                prepared[path].replace(path)
-                applied.append(path)
-        except Exception:
-            failed=[]
-            for path in reversed(applied):
-                try:
-                    if previous[path] is None:
-                        path.unlink(missing_ok=True)
-                    else:
-                        previous[path].replace(path)
-                except OSError:
-                    if previous[path] is not None:
-                        retained.add(previous[path])
-                    failed.append(str(path))
-            if failed:
-                raise RuntimeError(tr('Could not restore controller settings; backups: %1; files: %2',
-                                      ', '.join(map(str,retained)), ', '.join(failed)))
-            raise
-    finally:
-        for path in temporary:
-            if path not in retained:
-                try:
-                    path.unlink(missing_ok=True)
-                except OSError as error:
-                    print('WESP: could not remove enrollment temporary file: '+str(error),file=sys.stderr)
-    return prefs
-
+    """Persist enrollment using the current configuration and runtime paths."""
+    import enrollment
+    return enrollment.persist(selected,settings(),CONFIG,RUNTIME,preserve_scene=preserve_scene)
 
 def runtime():
     identity=(settings().get('controller') or {}).get('mac')
